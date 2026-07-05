@@ -7,6 +7,10 @@ import Tabs, { type TabName } from "@/components/providers/Tabs";
 import OverviewSection from "@/components/providers/OverviewSection";
 import ModelsSection from "@/components/providers/ModelsSection";
 import EmptyState from "@/components/providers/EmptyState";
+import type {
+  ProviderOverview,
+  ProviderStatus,
+} from "@/lib/providers/Provider";
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 28 },
@@ -20,12 +24,14 @@ const fadeUp: Variants = {
 const COIN_MASK =
   "radial-gradient(closest-side, rgba(0,0,0,1) 78%, rgba(0,0,0,0) 100%)";
 
-type ProviderStatus = "Connected" | "Available" | "Coming Soon";
-
 const STATUS_STYLES: Record<ProviderStatus, { dot: string; text: string }> = {
-  Connected: { dot: "#EE7B30", text: "var(--color-accent)" },
-  Available: { dot: "rgba(248,250,252,0.7)", text: "var(--color-muted)" },
-  "Coming Soon": {
+  connected: { dot: "#EE7B30", text: "var(--color-accent)" },
+  available: { dot: "rgba(248,250,252,0.7)", text: "var(--color-muted)" },
+  disconnected: {
+    dot: "rgba(248,250,252,0.28)",
+    text: "rgba(248,250,252,0.45)",
+  },
+  "coming-soon": {
     dot: "rgba(248,250,252,0.28)",
     text: "rgba(248,250,252,0.45)",
   },
@@ -33,14 +39,17 @@ const STATUS_STYLES: Record<ProviderStatus, { dot: string; text: string }> = {
 
 export type ProviderPageProps = {
   name: string;
-  slug: string;
+  statusLabel: string;
   status: ProviderStatus;
+  overview: ProviderOverview;
   coinSrc: string;
 };
 
 export default function ProviderPage({
   name,
+  statusLabel,
   status,
+  overview,
   coinSrc,
 }: ProviderPageProps) {
   const [activeTab, setActiveTab] = useState<TabName>("Overview");
@@ -132,7 +141,7 @@ export default function ProviderPage({
                 background: STATUS_STYLES[status].dot,
               }}
             />
-            {status}
+            {statusLabel}
           </motion.p>
 
           <motion.div
@@ -183,7 +192,9 @@ export default function ProviderPage({
           <Tabs active={activeTab} onChange={setActiveTab} />
 
           <div style={{ marginTop: 24 }}>
-            {activeTab === "Overview" && <OverviewSection />}
+            {activeTab === "Overview" && (
+              <OverviewSection overview={overview} />
+            )}
             {activeTab === "Models" && <ModelsSection />}
             {activeTab === "Usage" && <EmptyState text="No usage available." />}
             {activeTab === "Billing" && <EmptyState text="Coming Soon" />}

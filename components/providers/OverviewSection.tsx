@@ -1,11 +1,22 @@
-const ROWS = ["Organization", "Projects", "API Key Status", "Last Synced"];
+import type { ProviderOverview } from "@/lib/providers/Provider";
 
-export default function OverviewSection() {
+export default function OverviewSection({
+  overview,
+}: {
+  overview: ProviderOverview;
+}) {
+  const ROWS: { label: string; value: string }[] = [
+    { label: "Organization", value: overview.organization },
+    { label: "Projects", value: overview.projects },
+    { label: "API Key Status", value: overview.apiKeyStatus },
+    { label: "Last Synced", value: overview.lastSynced },
+  ];
+
   return (
     <div>
-      {ROWS.map((label, i) => (
+      {ROWS.map((row, i) => (
         <div
-          key={label}
+          key={row.label}
           className="flex items-center justify-between"
           style={{
             padding: "20px 4px",
@@ -20,7 +31,7 @@ export default function OverviewSection() {
               color: "var(--color-muted)",
             }}
           >
-            {label}
+            {row.label}
           </span>
           <span
             style={{
@@ -30,7 +41,7 @@ export default function OverviewSection() {
               color: "var(--color-text)",
             }}
           >
-            Not Connected
+            {row.value}
           </span>
         </div>
       ))}

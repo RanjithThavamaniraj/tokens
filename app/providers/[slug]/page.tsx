@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
+import { createProvider } from "@/lib/providers/ProviderFactory";
 
 const KNOWN_SLUGS = [
   "claude",
@@ -21,7 +22,8 @@ export default async function ProviderComingSoonPage({
 }) {
   const { slug } = await params;
 
-  if (!KNOWN_SLUGS.includes(slug as (typeof KNOWN_SLUGS)[number])) {
+  const provider = createProvider(slug);
+  if (!provider) {
     notFound();
   }
 
