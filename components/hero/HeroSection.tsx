@@ -117,7 +117,7 @@ export default function HeroSection({
             color: "#ffffff",
           }}
         >
-          22%
+          90%
         </div>
         <div
           style={{
@@ -132,7 +132,7 @@ export default function HeroSection({
           <div
             style={{
               height: "100%",
-              width: "22%",
+              width: "90%",
               background: "#f5a623",
             }}
           />
@@ -140,7 +140,7 @@ export default function HeroSection({
       </div>
 
       <div
-        className="absolute z-10 flex flex-col items-center text-center w-full bottom-[14%] md:bottom-[18%]"
+        className="absolute z-10 flex flex-col items-center text-center w-full bottom-[calc(14%-50px)] md:bottom-[calc(18%-50px)]"
         style={{
           left: "50%",
           transform: "translateX(-50%)",
@@ -225,7 +225,7 @@ export default function HeroSection({
             marginBottom: 12,
           }}
         >
-          I don&apos;t have a problem →
+          Start Monitoring
         </motion.button>
 
         <motion.a
