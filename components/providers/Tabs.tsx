@@ -1,21 +1,13 @@
 "use client";
 
-export const TAB_NAMES = [
-  "Overview",
-  "Models",
-  "Usage",
-  "Billing",
-  "Conversations",
-] as const;
-
-export type TabName = (typeof TAB_NAMES)[number];
-
 export default function Tabs({
+  tabs,
   active,
   onChange,
 }: {
-  active: TabName;
-  onChange: (tab: TabName) => void;
+  tabs: string[];
+  active: string;
+  onChange: (tab: string) => void;
 }) {
   return (
     <div
@@ -25,7 +17,7 @@ export default function Tabs({
         borderBottom: "1px solid var(--color-border)",
       }}
     >
-      {TAB_NAMES.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = tab === active;
         return (
           <button

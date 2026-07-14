@@ -56,6 +56,49 @@ export interface ProviderOverview {
 }
 
 // ---------------------------------------------------------------------------
+// Declarative provider metadata
+//
+// Static, synchronous facts about a provider — no API calls involved. These
+// drive UI decisions (e.g. which tabs to render) without the UI needing to
+// hardcode per-provider knowledge.
+// ---------------------------------------------------------------------------
+
+export type ProviderAuthMethod = "API_KEY" | "OAUTH" | "ENTERPRISE";
+
+export interface ProviderCapabilities {
+  models: boolean;
+  usage: boolean;
+  billing: boolean;
+  projects: boolean;
+  organizations: boolean;
+  rateLimits: boolean;
+  embeddings: boolean;
+  images: boolean;
+  responses: boolean;
+  files: boolean;
+  fineTuning: boolean;
+  assistants: boolean;
+  conversations: boolean;
+}
+
+/** Human-readable labels for each capability, used for tab text. */
+export const CAPABILITY_LABELS: Record<keyof ProviderCapabilities, string> = {
+  models: "Models",
+  usage: "Usage",
+  billing: "Billing",
+  projects: "Projects",
+  organizations: "Organizations",
+  rateLimits: "Rate Limits",
+  embeddings: "Embeddings",
+  images: "Images",
+  responses: "Responses",
+  files: "Files",
+  fineTuning: "Fine-tuning",
+  assistants: "Assistants",
+  conversations: "Conversations",
+};
+
+// ---------------------------------------------------------------------------
 // Provider interface
 // ---------------------------------------------------------------------------
 
@@ -63,6 +106,13 @@ export interface Provider {
   readonly id: ProviderId;
   readonly name: string;
   readonly status: ProviderStatus;
+
+  readonly authMethod: ProviderAuthMethod;
+  readonly displayName: string;
+  readonly description: string;
+  readonly documentationUrl: string;
+  readonly logo: string;
+  readonly capabilities: ProviderCapabilities;
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
@@ -101,6 +151,15 @@ export abstract class BaseProvider implements Provider {
   abstract readonly id: ProviderId;
   abstract readonly name: string;
   readonly status: ProviderStatus = "disconnected";
+
+  // No shared default makes sense for these — every concrete provider must
+  // declare its own metadata.
+  abstract readonly authMethod: ProviderAuthMethod;
+  abstract readonly displayName: string;
+  abstract readonly description: string;
+  abstract readonly documentationUrl: string;
+  abstract readonly logo: string;
+  abstract readonly capabilities: ProviderCapabilities;
 
   async connect(): Promise<void> {
     // No-op placeholder. Real auth/OAuth flow will live here per-provider.

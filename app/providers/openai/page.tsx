@@ -15,6 +15,7 @@ export default function OpenAIProviderPage() {
       status={provider.status}
       overview={provider.getOverview()}
       coinSrc="/coins/openai.png"
+      capabilities={provider.capabilities}
     />
   );
 }

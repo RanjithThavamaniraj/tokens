@@ -1,16 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
-import Tabs, { type TabName } from "@/components/providers/Tabs";
+import Tabs from "@/components/providers/Tabs";
 import OverviewSection from "@/components/providers/OverviewSection";
 import ModelsSection from "@/components/providers/ModelsSection";
 import EmptyState from "@/components/providers/EmptyState";
-import type {
-  ProviderOverview,
-  ProviderStatus,
+import {
+  CAPABILITY_LABELS,
+  type ProviderCapabilities,
+  type ProviderOverview,
+  type ProviderStatus,
 } from "@/lib/providers/Provider";
+
+// Fixed key order for capability-derived tabs (matches ProviderCapabilities).
+const CAPABILITY_ORDER: (keyof ProviderCapabilities)[] = [
+  "models",
+  "usage",
+  "billing",
+  "projects",
+  "organizations",
+  "rateLimits",
+  "embeddings",
+  "images",
+  "responses",
+  "files",
+  "fineTuning",
+  "assistants",
+  "conversations",
+];
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 28 },
@@ -43,6 +62,7 @@ export type ProviderPageProps = {
   status: ProviderStatus;
   overview: ProviderOverview;
   coinSrc: string;
+  capabilities: ProviderCapabilities;
 };
 
 export default function ProviderPage({
@@ -51,8 +71,33 @@ export default function ProviderPage({
   status,
   overview,
   coinSrc,
+  capabilities,
 }: ProviderPageProps) {
-  const [activeTab, setActiveTab] = useState<TabName>("Overview");
+  // "Overview" is Tokens' own connection-status presentation, not a provider
+  // API capability, so it's always first and not derived from `capabilities`.
+  const capabilityTabs = CAPABILITY_ORDER.filter(
+    (key) => capabilities[key],
+  ).map((key) => ({ key, label: CAPABILITY_LABELS[key] }));
+  const tabs = ["Overview", ...capabilityTabs.map((tab) => tab.label)];
+
+  const [activeTab, setActiveTab] = useState<string>("Overview");
+
+  const activeCapabilityTab = capabilityTabs.find(
+    (tab) => tab.label === activeTab,
+  );
+
+  let tabContent: ReactNode = null;
+  if (activeTab === "Overview") {
+    tabContent = <OverviewSection overview={overview} />;
+  } else if (activeTab === "Models" && capabilities.models) {
+    tabContent = <ModelsSection />;
+  } else if (activeCapabilityTab) {
+    tabContent = (
+      <EmptyState
+        text={`No ${activeCapabilityTab.label.toLowerCase()} available until your account is connected.`}
+      />
+    );
+  }
 
   return (
     <main
@@ -189,19 +234,9 @@ export default function ProviderPage({
           animate="visible"
           style={{ marginTop: "clamp(56px, 8vw, 80px)" }}
         >
-          <Tabs active={activeTab} onChange={setActiveTab} />
+          <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
-          <div style={{ marginTop: 24 }}>
-            {activeTab === "Overview" && (
-              <OverviewSection overview={overview} />
-            )}
-            {activeTab === "Models" && <ModelsSection />}
-            {activeTab === "Usage" && <EmptyState text="No usage available." />}
-            {activeTab === "Billing" && <EmptyState text="Coming Soon" />}
-            {activeTab === "Conversations" && (
-              <EmptyState text="Coming Soon" />
-            )}
-          </div>
+          <div style={{ marginTop: 24 }}>{tabContent}</div>
         </motion.div>
       </div>
     </main>
