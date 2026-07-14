@@ -91,6 +91,12 @@ export default function ProviderPage({
   const [activeTab, setActiveTab] = useState<string>("Overview");
   const [models, setModels] = useState<ProviderModel[] | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  function handleDisconnect() {
+    setModels(null);
+    setModelsError(null);
+  }
 
   const activeCapabilityTab = capabilityTabs.find(
     (tab) => tab.label === activeTab,
@@ -100,7 +106,9 @@ export default function ProviderPage({
   if (activeTab === "Overview") {
     tabContent = <OverviewSection overview={overview} />;
   } else if (activeTab === "Models" && capabilities.models) {
-    tabContent = <ModelsSection models={models} error={modelsError} />;
+    tabContent = (
+      <ModelsSection models={models} error={modelsError} loading={modelsLoading} />
+    );
   } else if (activeCapabilityTab) {
     tabContent = (
       <EmptyState
@@ -210,6 +218,8 @@ export default function ProviderPage({
                 setModelsError(result.error);
               }
             }}
+            onDisconnect={handleDisconnect}
+            onModelsLoadingChange={setModelsLoading}
           />
         </div>
 

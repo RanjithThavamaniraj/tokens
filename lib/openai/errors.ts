@@ -9,7 +9,7 @@ export class OpenAIClientError extends Error {
   readonly kind: OpenAIErrorKind;
   constructor(message: string, kind: OpenAIErrorKind) {
     super(message);
-    this.name = "OpenAIClientError";
+    this.name = kind === "invalid_api_key" ? "AuthenticationError" : "OpenAIClientError";
     this.kind = kind;
   }
 }
@@ -21,6 +21,14 @@ export class OpenAIClientError extends Error {
  * HTTP-level errors. We duck-type on `.status` rather than importing the
  * SDK's error classes so this stays simple and doesn't couple us to SDK
  * internals beyond the one property we need.
+ *
+ * Naming convention: the resulting error's `.name` is `"AuthenticationError"`
+ * when `kind === "invalid_api_key"`, and `"OpenAIClientError"` for every
+ * other kind. This lets fully generic, provider-agnostic UI code (e.g.
+ * IntegrationPanel, which is shared across all providers and must not import
+ * OpenAI-specific types) distinguish "the credential is no longer valid, the
+ * user should reconnect" from "some other recoverable failure" purely via
+ * the standard `Error.name` property.
  */
 export function normalizeOpenAIError(error: unknown): OpenAIClientError {
   if (error instanceof OpenAIClientError) {

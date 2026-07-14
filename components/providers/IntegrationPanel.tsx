@@ -24,18 +24,24 @@ export default function IntegrationPanel({
   providerId,
   integration,
   onModelsResult,
+  onDisconnect,
+  onModelsLoadingChange,
 }: {
   providerId: ProviderId;
   integration: ProviderIntegration;
   onModelsResult?: (
     result: { models: ProviderModel[] } | { error: string },
   ) => void;
+  onDisconnect?: () => void;
+  onModelsLoadingChange?: (loading: boolean) => void;
 }) {
   const provider = useMemo(() => createProvider(providerId), [providerId]);
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<ConnectStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const oauthField = integration.fields.find(
     (field) => field.type === "oauth",
@@ -55,6 +61,37 @@ export default function IntegrationPanel({
       setStatus("error");
       setErrorMessage(message);
       onModelsResult?.({ error: message });
+    }
+  }
+
+  async function resetToDisconnected(message?: string) {
+    await provider?.disconnect(); // currently a no-op on every provider, but call it anyway for interface correctness / future-proofing
+    setValues({});
+    setRefreshError(null);
+    setErrorMessage(message ?? null);
+    setStatus(message ? "error" : "idle");
+    onDisconnect?.();
+  }
+
+  async function handleRefresh() {
+    if (!provider) return;
+    setIsRefreshing(true);
+    onModelsLoadingChange?.(true);
+    setRefreshError(null);
+    try {
+      const models = await provider.getModels(values);
+      onModelsResult?.({ models });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AuthenticationError") {
+        await resetToDisconnected("Your API key is no longer valid. Please reconnect.");
+      } else {
+        const message =
+          error instanceof Error ? error.message : "Unable to refresh models.";
+        setRefreshError(message);
+      }
+    } finally {
+      setIsRefreshing(false);
+      onModelsLoadingChange?.(false);
     }
   }
 
@@ -181,17 +218,70 @@ export default function IntegrationPanel({
 
       <div style={{ marginTop: 20 }}>
         {status === "success" ? (
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              color: "var(--color-accent)",
-              textAlign: "center",
-            }}
-          >
-            Connected.
-          </p>
+          <div>
+            <p
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                color: "var(--color-accent)",
+                textAlign: "center",
+              }}
+            >
+              Connected.
+            </p>
+
+            <div
+              className="flex items-center gap-3"
+              style={{ marginTop: 16 }}
+            >
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing || !provider}
+                className="flex-1 rounded-full font-semibold"
+                style={{
+                  background: "#EE7B30",
+                  color: "#06070B",
+                  padding: "10px 20px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.9rem",
+                  opacity: isRefreshing || !provider ? 0.7 : 1,
+                }}
+              >
+                {isRefreshing ? "Refreshing..." : "Refresh Models"}
+              </button>
+              <button
+                type="button"
+                onClick={() => resetToDisconnected()}
+                className="flex-1 rounded-full font-semibold"
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text)",
+                  padding: "10px 20px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.9rem",
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+
+            {refreshError && (
+              <p
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.8rem",
+                  color: "var(--color-muted)",
+                  marginTop: 12,
+                  textAlign: "center",
+                }}
+              >
+                Couldn&apos;t refresh: {refreshError}
+              </p>
+            )}
+          </div>
         ) : (
           <button
             type="button"

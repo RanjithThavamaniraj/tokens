@@ -4,10 +4,16 @@ import type { ProviderModel } from "@/lib/providers/Provider";
 export default function ModelsSection({
   models,
   error,
+  loading,
 }: {
   models: ProviderModel[] | null;
   error: string | null;
+  loading: boolean;
 }) {
+  if (loading) {
+    return <EmptyState text="Refreshing models..." />;
+  }
+
   if (error) {
     return <EmptyState text={error} />;
   }
