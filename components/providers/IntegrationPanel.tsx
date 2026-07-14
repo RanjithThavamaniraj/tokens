@@ -8,6 +8,7 @@ import type {
   ProviderModel,
 } from "@/lib/providers/Provider";
 import { createProvider } from "@/lib/providers/ProviderFactory";
+import { connectionManager } from "@/lib/connections/ConnectionManager";
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 28 },
@@ -53,6 +54,7 @@ export default function IntegrationPanel({
     setErrorMessage(null);
     try {
       await provider.connect(values);
+      await connectionManager.save(providerId, values);
       const models = await provider.getModels(values);
       setStatus("success");
       onModelsResult?.({ models });
@@ -66,6 +68,7 @@ export default function IntegrationPanel({
 
   async function resetToDisconnected(message?: string) {
     await provider?.disconnect(); // currently a no-op on every provider, but call it anyway for interface correctness / future-proofing
+    await connectionManager.clear(providerId);
     setValues({});
     setRefreshError(null);
     setErrorMessage(message ?? null);

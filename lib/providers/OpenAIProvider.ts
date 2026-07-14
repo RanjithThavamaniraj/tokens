@@ -2,11 +2,13 @@ import {
   BaseProvider,
   type ProviderAuthMethod,
   type ProviderCapabilities,
+  type ProviderExecutionRequest,
+  type ProviderExecutionResult,
   type ProviderId,
   type ProviderIntegration,
   type ProviderModel,
 } from "@/lib/providers/Provider";
-import { listModels } from "@/lib/openai/client";
+import { generateCompletion, listModels } from "@/lib/openai/client";
 import { OpenAIClientError } from "@/lib/openai/errors";
 
 export class OpenAIProvider extends BaseProvider {
@@ -74,5 +76,17 @@ export class OpenAIProvider extends BaseProvider {
     }
     const models = await listModels(apiKey);
     return models.map((model) => ({ id: model.id, name: model.id }));
+  }
+
+  async executePrompt(request: ProviderExecutionRequest): Promise<ProviderExecutionResult> {
+    const apiKey = request.credentials?.apiKey;
+    if (!apiKey) {
+      throw new OpenAIClientError("An API key is required.", "invalid_api_key");
+    }
+    const text = await generateCompletion(apiKey, {
+      systemPrompt: request.systemPrompt,
+      userPrompt: request.userPrompt,
+    });
+    return { text };
   }
 }

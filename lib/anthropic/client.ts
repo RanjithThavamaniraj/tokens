@@ -24,3 +24,31 @@ export async function listModels(apiKey: string): Promise<AnthropicModelSummary[
     throw normalizeAnthropicError(error);
   }
 }
+
+// Used by ClaudeProvider.executePrompt() for real prompt execution against
+// the Messages API. Request-scoped like listModels() above — no caching, no
+// stored state.
+//
+// Model: "claude-haiku-4-5" — the current fast/cheap Claude model. (Not
+// "claude-3-5-haiku-latest": that alias isn't in the installed
+// @anthropic-ai/sdk's `Model` union and targets a retired model family.)
+export async function generateCompletion(
+  apiKey: string,
+  request: { systemPrompt?: string; userPrompt: string },
+): Promise<string> {
+  try {
+    const client = createSdkClient(apiKey);
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 1024,
+      ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
+      messages: [{ role: "user" as const, content: request.userPrompt }],
+    });
+    const textBlock = response.content.find(
+      (block): block is Extract<typeof block, { type: "text" }> => block.type === "text",
+    );
+    return textBlock?.text ?? "";
+  } catch (error) {
+    throw normalizeAnthropicError(error);
+  }
+}

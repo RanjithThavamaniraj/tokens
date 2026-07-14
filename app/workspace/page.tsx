@@ -5,6 +5,7 @@ import { motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
 import type { ProviderId } from "@/lib/providers/Provider";
+import { connectionManager } from "@/lib/connections/ConnectionManager";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -80,10 +81,24 @@ export default function WorkspacePage() {
     await Promise.allSettled(
       selected.map(async (id) => {
         try {
+          const connected = await connectionManager.isConnected(id);
+          if (!connected) {
+            setResults((prev) => ({
+              ...prev,
+              [id]: {
+                status: "error",
+                error: "Not connected. Connect this provider first.",
+              },
+            }));
+            return;
+          }
+
+          const credentials = await connectionManager.get(id);
           const provider = createProvider(id);
           const result = await provider!.executePrompt({
             systemPrompt: systemPrompt || undefined,
             userPrompt,
+            credentials: credentials ?? undefined,
           });
           setResults((prev) => ({
             ...prev,
@@ -92,6 +107,9 @@ export default function WorkspacePage() {
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Something went wrong.";
+          if (error instanceof Error && error.name === "AuthenticationError") {
+            await connectionManager.clear(id);
+          }
           setResults((prev) => ({
             ...prev,
             [id]: { status: "error", error: message },

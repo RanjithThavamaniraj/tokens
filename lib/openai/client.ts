@@ -21,3 +21,27 @@ export async function listModels(apiKey: string): Promise<OpenAIModelSummary[]> 
     throw normalizeOpenAIError(error);
   }
 }
+
+// Used by OpenAIProvider.executePrompt() for real prompt execution against
+// the Chat Completions API. Request-scoped like listModels() above — no
+// caching, no stored state.
+export async function generateCompletion(
+  apiKey: string,
+  request: { systemPrompt?: string; userPrompt: string },
+): Promise<string> {
+  try {
+    const client = createSdkClient(apiKey);
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        ...(request.systemPrompt
+          ? [{ role: "system" as const, content: request.systemPrompt }]
+          : []),
+        { role: "user" as const, content: request.userPrompt },
+      ],
+    });
+    return response.choices[0]?.message?.content ?? "";
+  } catch (error) {
+    throw normalizeOpenAIError(error);
+  }
+}
