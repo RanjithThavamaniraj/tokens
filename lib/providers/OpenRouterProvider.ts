@@ -3,6 +3,7 @@ import {
   type ProviderAuthMethod,
   type ProviderCapabilities,
   type ProviderId,
+  type ProviderIntegration,
 } from "@/lib/providers/Provider";
 
 export class OpenRouterProvider extends BaseProvider {
@@ -29,5 +30,21 @@ export class OpenRouterProvider extends BaseProvider {
     fineTuning: false,
     assistants: false,
     conversations: false,
+  };
+  readonly integration: ProviderIntegration = {
+    title: "Connect with OpenRouter",
+    description: "Authorize Tokens to access your OpenRouter account.",
+    requiresAdmin: false,
+    instructions:
+      "You'll be redirected to OpenRouter to approve access, then returned here automatically.",
+    fields: [
+      {
+        id: "oauth",
+        label: "Connect OpenRouter",
+        description: "Uses OpenRouter's OAuth flow — no key to copy or paste.",
+        required: true,
+        type: "oauth",
+      },
+    ],
   };
 }

@@ -3,6 +3,7 @@ import {
   type ProviderAuthMethod,
   type ProviderCapabilities,
   type ProviderId,
+  type ProviderIntegration,
 } from "@/lib/providers/Provider";
 
 export class ClaudeProvider extends BaseProvider {
@@ -29,5 +30,25 @@ export class ClaudeProvider extends BaseProvider {
     fineTuning: false,
     assistants: false,
     conversations: false,
+  };
+  readonly integration: ProviderIntegration = {
+    title: "Connect with API Key",
+    description:
+      "Paste an Anthropic API key to start syncing models, usage, and billing.",
+    requiresAdmin: false,
+    instructions:
+      "Create a key at console.anthropic.com/settings/keys, or an admin key under console.anthropic.com/settings/admin-keys for usage and billing access.",
+    fields: [
+      {
+        id: "apiKey",
+        label: "API Key",
+        placeholder: "sk-ant-...",
+        description:
+          "Your Anthropic API key. Use an admin key to unlock usage and billing data.",
+        required: true,
+        type: "password",
+        validation: 'Starts with "sk-ant-"',
+      },
+    ],
   };
 }

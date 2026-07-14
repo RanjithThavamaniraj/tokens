@@ -10,12 +10,14 @@ export default function OpenAIProviderPage() {
 
   return (
     <ProviderPage
+      providerId={provider.id}
       name={provider.name}
       statusLabel={provider.statusLabel()}
       status={provider.status}
       overview={provider.getOverview()}
       coinSrc="/coins/openai.png"
       capabilities={provider.capabilities}
+      integration={provider.integration}
     />
   );
 }

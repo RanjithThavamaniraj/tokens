@@ -99,6 +99,40 @@ export const CAPABILITY_LABELS: Record<keyof ProviderCapabilities, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Declarative connection metadata
+//
+// Describes HOW a provider is connected (which fields to show, what
+// instructions to surface) without performing any real auth. `authMethod`
+// and `documentationUrl` already live on `Provider` and remain the single
+// source of truth for those facts — they are intentionally NOT duplicated
+// here.
+// ---------------------------------------------------------------------------
+
+export type ProviderFieldType = "text" | "password" | "oauth";
+
+export interface ProviderField {
+  id: string;
+  label: string;
+  placeholder?: string;
+  description?: string;
+  required: boolean;
+  type: ProviderFieldType;
+  /**
+   * Descriptive only (e.g. a regex or plain-English rule) — NOT enforced
+   * anywhere. Purely metadata for a future real form.
+   */
+  validation?: string;
+}
+
+export interface ProviderIntegration {
+  title: string;
+  description: string;
+  requiresAdmin: boolean;
+  instructions: string;
+  fields: ProviderField[];
+}
+
+// ---------------------------------------------------------------------------
 // Provider interface
 // ---------------------------------------------------------------------------
 
@@ -113,11 +147,12 @@ export interface Provider {
   readonly documentationUrl: string;
   readonly logo: string;
   readonly capabilities: ProviderCapabilities;
+  readonly integration: ProviderIntegration;
 
-  connect(): Promise<void>;
+  connect(credentials?: Record<string, string>): Promise<void>;
   disconnect(): Promise<void>;
 
-  getModels(): Promise<ProviderModel[]>;
+  getModels(credentials?: Record<string, string>): Promise<ProviderModel[]>;
   getUsage(): Promise<ProviderUsage | null>;
   getBilling(): Promise<ProviderBilling | null>;
   getConversations(): Promise<ProviderConversation[]>;
@@ -160,16 +195,18 @@ export abstract class BaseProvider implements Provider {
   abstract readonly documentationUrl: string;
   abstract readonly logo: string;
   abstract readonly capabilities: ProviderCapabilities;
+  abstract readonly integration: ProviderIntegration;
 
-  async connect(): Promise<void> {
-    // No-op placeholder. Real auth/OAuth flow will live here per-provider.
+  async connect(_credentials?: Record<string, string>): Promise<void> {
+    // Placeholder. Real auth/connection logic will live here per-provider.
+    throw new Error("This integration has not been implemented yet.");
   }
 
   async disconnect(): Promise<void> {
     // No-op placeholder.
   }
 
-  async getModels(): Promise<ProviderModel[]> {
+  async getModels(_credentials?: Record<string, string>): Promise<ProviderModel[]> {
     return [];
   }
 

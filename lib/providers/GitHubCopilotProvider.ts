@@ -3,6 +3,7 @@ import {
   type ProviderAuthMethod,
   type ProviderCapabilities,
   type ProviderId,
+  type ProviderIntegration,
 } from "@/lib/providers/Provider";
 
 export class GitHubCopilotProvider extends BaseProvider {
@@ -29,5 +30,22 @@ export class GitHubCopilotProvider extends BaseProvider {
     fineTuning: false,
     assistants: false,
     conversations: false,
+  };
+  readonly integration: ProviderIntegration = {
+    title: "Connect with GitHub",
+    description:
+      "Authorize Tokens to access your GitHub organization's Copilot data.",
+    requiresAdmin: false,
+    instructions:
+      "You'll be redirected to GitHub to approve access, then returned here automatically.",
+    fields: [
+      {
+        id: "oauth",
+        label: "Connect GitHub",
+        description: "Uses GitHub's OAuth flow — no key to copy or paste.",
+        required: true,
+        type: "oauth",
+      },
+    ],
   };
 }

@@ -3,6 +3,7 @@ import {
   type ProviderAuthMethod,
   type ProviderCapabilities,
   type ProviderId,
+  type ProviderIntegration,
 } from "@/lib/providers/Provider";
 
 export class CursorProvider extends BaseProvider {
@@ -29,5 +30,23 @@ export class CursorProvider extends BaseProvider {
     fineTuning: false,
     assistants: false,
     conversations: true,
+  };
+  readonly integration: ProviderIntegration = {
+    title: "Connect with Admin Key",
+    description:
+      "Paste an Enterprise-issued admin key to start syncing team usage and billing.",
+    requiresAdmin: true,
+    instructions:
+      "Ask your Cursor Enterprise admin to issue an Admin API key from the team dashboard. Self-serve plans do not have access to this API.",
+    fields: [
+      {
+        id: "adminApiKey",
+        label: "Admin API Key",
+        placeholder: "Enter your admin-issued key",
+        description: "Issued by your Cursor Enterprise team admin.",
+        required: true,
+        type: "password",
+      },
+    ],
   };
 }

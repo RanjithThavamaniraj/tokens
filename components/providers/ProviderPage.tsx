@@ -7,9 +7,13 @@ import Tabs from "@/components/providers/Tabs";
 import OverviewSection from "@/components/providers/OverviewSection";
 import ModelsSection from "@/components/providers/ModelsSection";
 import EmptyState from "@/components/providers/EmptyState";
+import IntegrationPanel from "@/components/providers/IntegrationPanel";
 import {
   CAPABILITY_LABELS,
   type ProviderCapabilities,
+  type ProviderId,
+  type ProviderIntegration,
+  type ProviderModel,
   type ProviderOverview,
   type ProviderStatus,
 } from "@/lib/providers/Provider";
@@ -57,21 +61,25 @@ const STATUS_STYLES: Record<ProviderStatus, { dot: string; text: string }> = {
 };
 
 export type ProviderPageProps = {
+  providerId: ProviderId;
   name: string;
   statusLabel: string;
   status: ProviderStatus;
   overview: ProviderOverview;
   coinSrc: string;
   capabilities: ProviderCapabilities;
+  integration: ProviderIntegration;
 };
 
 export default function ProviderPage({
+  providerId,
   name,
   statusLabel,
   status,
   overview,
   coinSrc,
   capabilities,
+  integration,
 }: ProviderPageProps) {
   // "Overview" is Tokens' own connection-status presentation, not a provider
   // API capability, so it's always first and not derived from `capabilities`.
@@ -81,6 +89,8 @@ export default function ProviderPage({
   const tabs = ["Overview", ...capabilityTabs.map((tab) => tab.label)];
 
   const [activeTab, setActiveTab] = useState<string>("Overview");
+  const [models, setModels] = useState<ProviderModel[] | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
 
   const activeCapabilityTab = capabilityTabs.find(
     (tab) => tab.label === activeTab,
@@ -90,7 +100,7 @@ export default function ProviderPage({
   if (activeTab === "Overview") {
     tabContent = <OverviewSection overview={overview} />;
   } else if (activeTab === "Models" && capabilities.models) {
-    tabContent = <ModelsSection />;
+    tabContent = <ModelsSection models={models} error={modelsError} />;
   } else if (activeCapabilityTab) {
     tabContent = (
       <EmptyState
@@ -189,42 +199,18 @@ export default function ProviderPage({
             {statusLabel}
           </motion.p>
 
-          <motion.div
-            custom={3}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            className="flex items-center gap-3"
-            style={{ marginTop: 32 }}
-          >
-            <button
-              type="button"
-              className="rounded-full font-semibold"
-              style={{
-                background: "#EE7B30",
-                color: "#06070B",
-                padding: "10px 20px",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
-              }}
-            >
-              Manage Connection
-            </button>
-            <button
-              type="button"
-              className="rounded-full"
-              style={{
-                background: "transparent",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-text)",
-                padding: "10px 20px",
-                fontFamily: "var(--font-body)",
-                fontSize: "0.9rem",
-              }}
-            >
-              Disconnect
-            </button>
-          </motion.div>
+          <IntegrationPanel
+            providerId={providerId}
+            integration={integration}
+            onModelsResult={(result) => {
+              if ("models" in result) {
+                setModels(result.models);
+                setModelsError(null);
+              } else {
+                setModelsError(result.error);
+              }
+            }}
+          />
         </div>
 
         <motion.div

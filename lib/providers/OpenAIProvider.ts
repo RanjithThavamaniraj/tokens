@@ -3,7 +3,11 @@ import {
   type ProviderAuthMethod,
   type ProviderCapabilities,
   type ProviderId,
+  type ProviderIntegration,
+  type ProviderModel,
 } from "@/lib/providers/Provider";
+import { listModels } from "@/lib/openai/client";
+import { OpenAIClientError } from "@/lib/openai/errors";
 
 export class OpenAIProvider extends BaseProvider {
   readonly id: ProviderId = "openai";
@@ -30,4 +34,45 @@ export class OpenAIProvider extends BaseProvider {
     assistants: true,
     conversations: true,
   };
+  readonly integration: ProviderIntegration = {
+    title: "Connect with API Key",
+    description:
+      "Paste an OpenAI API key to start syncing models, usage, and billing.",
+    requiresAdmin: false,
+    instructions:
+      "Create a secret key at platform.openai.com/api-keys, or an admin key at platform.openai.com/settings/organization/admin-keys for usage and billing access.",
+    fields: [
+      {
+        id: "apiKey",
+        label: "API Key",
+        placeholder: "sk-...",
+        description:
+          "Your OpenAI secret key. Use an admin key to unlock usage and billing data.",
+        required: true,
+        type: "password",
+        validation: 'Starts with "sk-"',
+      },
+    ],
+  };
+
+  // Fully stateless: the API key is never stored on this instance. Every
+  // call receives it as a parameter and forwards it straight through to the
+  // client layer, request-scoped.
+
+  async connect(credentials?: Record<string, string>): Promise<void> {
+    const apiKey = credentials?.apiKey;
+    if (!apiKey) {
+      throw new OpenAIClientError("An API key is required.", "invalid_api_key");
+    }
+    await listModels(apiKey); // validates the key; result intentionally discarded, not stored
+  }
+
+  async getModels(credentials?: Record<string, string>): Promise<ProviderModel[]> {
+    const apiKey = credentials?.apiKey;
+    if (!apiKey) {
+      return [];
+    }
+    const models = await listModels(apiKey);
+    return models.map((model) => ({ id: model.id, name: model.id }));
+  }
 }
