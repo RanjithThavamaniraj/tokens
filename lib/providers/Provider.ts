@@ -48,6 +48,16 @@ export interface ProviderConversation {
   title: string;
 }
 
+export interface ProviderExecutionRequest {
+  systemPrompt?: string;
+  userPrompt: string;
+  credentials?: Record<string, string>;
+}
+
+export interface ProviderExecutionResult {
+  text: string;
+}
+
 export interface ProviderOverview {
   organization: string;
   projects: string;
@@ -157,6 +167,8 @@ export interface Provider {
   getBilling(): Promise<ProviderBilling | null>;
   getConversations(): Promise<ProviderConversation[]>;
 
+  executePrompt(request: ProviderExecutionRequest): Promise<ProviderExecutionResult>;
+
   lastSynced(): Date | null;
 
   /** Synchronous placeholder summary for the Overview tab. */
@@ -220,6 +232,10 @@ export abstract class BaseProvider implements Provider {
 
   async getConversations(): Promise<ProviderConversation[]> {
     return [];
+  }
+
+  async executePrompt(_request: ProviderExecutionRequest): Promise<ProviderExecutionResult> {
+    return { text: "Execution not implemented." };
   }
 
   lastSynced(): Date | null {
