@@ -7,11 +7,13 @@ import { createProvider } from "@/lib/providers/ProviderFactory";
 import type { Message, ProviderId } from "@/lib/providers/Provider";
 import { connectionManager } from "@/lib/connections/ConnectionManager";
 import MarkdownResponse from "@/components/workspace/MarkdownResponse";
+import PromptLibraryPanel from "@/components/workspace/PromptLibraryPanel";
 import {
   buildComparisonSummary,
   computeResponseStats,
   type ComparisonEntry,
 } from "@/lib/workspace/responseStats";
+import type { LibraryPrompt } from "@/lib/prompts/PromptLibrary";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -266,6 +268,13 @@ export default function WorkspacePage() {
     await executeTurn(id, base, newContent);
   }
 
+  // Fills the two controlled prompt fields for review/editing only — never
+  // executes anything on its own.
+  function handleSelectPrompt(prompt: LibraryPrompt) {
+    setSystemPrompt(prompt.systemPrompt);
+    setUserPrompt(prompt.userPrompt);
+  }
+
   function handlePromptKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
@@ -409,7 +418,11 @@ export default function WorkspacePage() {
             </div>
           </div>
 
-          <label className="mt-8 flex flex-col gap-2">
+          <div className="mt-8">
+            <PromptLibraryPanel onSelect={handleSelectPrompt} />
+          </div>
+
+          <label className="mt-6 flex flex-col gap-2">
             <span
               style={{
                 fontFamily: "var(--font-body)",
