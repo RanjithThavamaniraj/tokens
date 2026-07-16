@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { Message } from "@/lib/providers/Provider";
 import type { OpenAIModelSummary } from "./types";
 import { normalizeOpenAIError } from "./errors";
 
@@ -25,20 +26,21 @@ export async function listModels(apiKey: string): Promise<OpenAIModelSummary[]> 
 // Used by OpenAIProvider.executePrompt() for real prompt execution against
 // the Chat Completions API. Request-scoped like listModels() above — no
 // caching, no stored state.
+//
+// The generic Message roles map 1:1 onto Chat Completions roles, so no
+// translation beyond the mapping below is needed.
 export async function generateCompletion(
   apiKey: string,
-  request: { systemPrompt?: string; userPrompt: string },
+  messages: Message[],
 ): Promise<string> {
   try {
     const client = createSdkClient(apiKey);
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        ...(request.systemPrompt
-          ? [{ role: "system" as const, content: request.systemPrompt }]
-          : []),
-        { role: "user" as const, content: request.userPrompt },
-      ],
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
     });
     return response.choices[0]?.message?.content ?? "";
   } catch (error) {

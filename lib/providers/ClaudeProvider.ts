@@ -83,10 +83,7 @@ export class ClaudeProvider extends BaseProvider {
     if (!apiKey) {
       throw new AnthropicClientError("An API key is required.", "invalid_api_key");
     }
-    const text = await generateCompletion(apiKey, {
-      systemPrompt: request.systemPrompt,
-      userPrompt: request.userPrompt,
-    });
+    const text = await generateCompletion(apiKey, request.messages);
     return { text };
   }
 }

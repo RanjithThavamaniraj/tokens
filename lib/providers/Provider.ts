@@ -48,9 +48,24 @@ export interface ProviderConversation {
   title: string;
 }
 
+// ---------------------------------------------------------------------------
+// Generic message model
+//
+// Provider-agnostic: the Workspace only ever constructs these. Each provider
+// translates them into its own API format (e.g. OpenAI keeps `system` inline
+// in messages[]; Anthropic hoists it to a top-level `system` param). New
+// roles can be added to this union without changing the Provider interface.
+// ---------------------------------------------------------------------------
+
+export type MessageRole = "system" | "user" | "assistant";
+
+export interface Message {
+  role: MessageRole;
+  content: string;
+}
+
 export interface ProviderExecutionRequest {
-  systemPrompt?: string;
-  userPrompt: string;
+  messages: Message[];
   credentials?: Record<string, string>;
 }
 

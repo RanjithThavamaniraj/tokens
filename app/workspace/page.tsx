@@ -122,8 +122,12 @@ export default function WorkspacePage() {
           const credentials = await connectionManager.get(id);
           const provider = createProvider(id);
           const result = await provider!.executePrompt({
-            systemPrompt: systemPrompt || undefined,
-            userPrompt,
+            messages: [
+              ...(systemPrompt
+                ? [{ role: "system" as const, content: systemPrompt }]
+                : []),
+              { role: "user" as const, content: userPrompt },
+            ],
             credentials: credentials ?? undefined,
           });
           setResults((prev) => ({

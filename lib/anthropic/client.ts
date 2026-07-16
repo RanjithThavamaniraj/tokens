@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { Message } from "@/lib/providers/Provider";
 import type { AnthropicModelSummary } from "./types";
 import { normalizeAnthropicError } from "./errors";
 
@@ -32,17 +33,31 @@ export async function listModels(apiKey: string): Promise<AnthropicModelSummary[
 // Model: "claude-haiku-4-5" — the current fast/cheap Claude model. (Not
 // "claude-3-5-haiku-latest": that alias isn't in the installed
 // @anthropic-ai/sdk's `Model` union and targets a retired model family.)
+// The Messages API keeps `system` as a top-level param and rejects
+// system-role entries inside `messages[]`, so generic system messages are
+// hoisted out here — this file owns that format divergence, not callers.
 export async function generateCompletion(
   apiKey: string,
-  request: { systemPrompt?: string; userPrompt: string },
+  messages: Message[],
 ): Promise<string> {
   try {
+    const system = messages
+      .filter((message) => message.role === "system")
+      .map((message) => message.content)
+      .join("\n\n");
+    const turns = messages
+      .filter(
+        (message): message is Message & { role: "user" | "assistant" } =>
+          message.role === "user" || message.role === "assistant",
+      )
+      .map((message) => ({ role: message.role, content: message.content }));
+
     const client = createSdkClient(apiKey);
     const response = await client.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 1024,
-      ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
-      messages: [{ role: "user" as const, content: request.userPrompt }],
+      ...(system ? { system } : {}),
+      messages: turns,
     });
     const textBlock = response.content.find(
       (block): block is Extract<typeof block, { type: "text" }> => block.type === "text",
