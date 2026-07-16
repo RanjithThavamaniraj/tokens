@@ -8,11 +8,13 @@ import type { Message, ProviderId } from "@/lib/providers/Provider";
 import { connectionManager } from "@/lib/connections/ConnectionManager";
 import MarkdownResponse from "@/components/workspace/MarkdownResponse";
 import PromptLibraryPanel from "@/components/workspace/PromptLibraryPanel";
+import ConsensusCard from "@/components/workspace/ConsensusCard";
 import {
   buildComparisonSummary,
   computeResponseStats,
   type ComparisonEntry,
 } from "@/lib/workspace/responseStats";
+import { computeConsensus, type ConsensusResponse } from "@/lib/workspace/consensus";
 import type { LibraryPrompt } from "@/lib/prompts/PromptLibrary";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
@@ -517,6 +519,25 @@ export default function WorkspacePage() {
             className="mx-auto w-full max-w-[640px]"
             style={{ marginTop: "clamp(40px, 6vw, 56px)" }}
           >
+            {(() => {
+              const consensusResponses: ConsensusResponse[] = visibleResults
+                .map((id): ConsensusResponse | null => {
+                  const text = lastAssistantText(conversations[id] ?? []);
+                  if (!text) return null;
+                  const provider = providers.find((entry) => entry.id === id)!.provider;
+                  return {
+                    id: id as string,
+                    displayName: provider.displayName,
+                    text,
+                  };
+                })
+                .filter((entry): entry is ConsensusResponse => entry !== null);
+
+              if (consensusResponses.length < 2) return null;
+
+              const consensus = computeConsensus(consensusResponses);
+              return <ConsensusCard result={consensus} />;
+            })()}
             {(() => {
               const comparisonEntries: ComparisonEntry[] = visibleResults
                 .map((id): ComparisonEntry | null => {
