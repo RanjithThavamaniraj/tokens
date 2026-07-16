@@ -1,12 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
 import type { ProviderId } from "@/lib/providers/Provider";
 import { connectionManager } from "@/lib/connections/ConnectionManager";
 import MarkdownResponse from "@/components/workspace/MarkdownResponse";
+import {
+  buildComparisonSummary,
+  computeResponseStats,
+  type ComparisonEntry,
+} from "@/lib/workspace/responseStats";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -54,11 +59,24 @@ export default function WorkspacePage() {
     Partial<Record<ProviderId, ExecutionState>>
   >({});
   const [copiedId, setCopiedId] = useState<ProviderId | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<ProviderId>>(new Set());
 
   async function handleCopyResponse(id: ProviderId, text: string) {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 2000);
+  }
+
+  function toggleCollapsed(id: ProviderId) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   function toggleProvider(id: ProviderId) {
@@ -358,10 +376,67 @@ export default function WorkspacePage() {
             className="mx-auto w-full max-w-[640px]"
             style={{ marginTop: "clamp(40px, 6vw, 56px)" }}
           >
+            {(() => {
+              const comparisonEntries: ComparisonEntry[] = visibleResults
+                .map((id): ComparisonEntry | null => {
+                  const result = results[id];
+                  if (result?.status !== "done" || !result.text) return null;
+                  const provider = providers.find((entry) => entry.id === id)!.provider;
+                  return {
+                    id: id as string,
+                    displayName: provider.displayName,
+                    stats: computeResponseStats(result.text),
+                  };
+                })
+                .filter((entry): entry is ComparisonEntry => entry !== null);
+
+              const summaryLines = buildComparisonSummary(comparisonEntries);
+
+              return summaryLines.length > 0 ? (
+                <div
+                  className="rounded-lg"
+                  style={{
+                    background: "var(--color-glass)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 12,
+                    padding: "12px 16px",
+                    marginBottom: 16,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      color: "var(--color-text)",
+                    }}
+                  >
+                    {summaryLines[0]}
+                  </p>
+                  {summaryLines.slice(1).map((line, index) => (
+                    <p
+                      key={index}
+                      style={{
+                        fontFamily: "var(--font-body)",
+                        fontSize: "0.8rem",
+                        color: "var(--color-muted)",
+                        marginTop: 4,
+                      }}
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : null;
+            })()}
             <div className="flex flex-col gap-4">
               {visibleResults.map((id) => {
                 const provider = providers.find((entry) => entry.id === id)!.provider;
                 const result = results[id];
+                const stats =
+                  result?.status === "done" && result.text
+                    ? computeResponseStats(result.text)
+                    : null;
                 return (
                   <div
                     key={id}
@@ -384,25 +459,71 @@ export default function WorkspacePage() {
                         {provider.displayName}
                       </h2>
                       {result?.status === "done" && result.text && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopyResponse(id, result.text ?? "")}
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.75rem",
-                            color: "var(--color-text)",
-                            background: "var(--color-glass)",
-                            border: "1px solid var(--color-border)",
-                            borderRadius: 999,
-                            padding: "4px 10px",
-                            cursor: "pointer",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {copiedId === id ? "Copied" : "Copy Response"}
-                        </button>
+                        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyResponse(id, result.text ?? "")}
+                            style={{
+                              fontFamily: "var(--font-body)",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text)",
+                              background: "var(--color-glass)",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 999,
+                              padding: "4px 10px",
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {copiedId === id ? "Copied" : "Copy Response"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleCollapsed(id)}
+                            style={{
+                              fontFamily: "var(--font-body)",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text)",
+                              background: "var(--color-glass)",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 999,
+                              padding: "4px 10px",
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {collapsedIds.has(id) ? "Expand" : "Collapse"}
+                          </button>
+                        </div>
                       )}
                     </div>
+                    {stats && (
+                      <p
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.75rem",
+                          color: "var(--color-muted)",
+                          marginTop: 4,
+                        }}
+                      >
+                        {[
+                          `${stats.wordCount.toLocaleString()} ${stats.wordCount === 1 ? "word" : "words"}`,
+                          stats.readingTimeLabel,
+                          `${stats.characterCount.toLocaleString()} ${stats.characterCount === 1 ? "character" : "characters"}`,
+                          stats.codeBlockCount > 0
+                            ? `${stats.codeBlockCount} ${stats.codeBlockCount === 1 ? "code block" : "code blocks"}`
+                            : null,
+                          stats.tableCount > 0
+                            ? `${stats.tableCount} ${stats.tableCount === 1 ? "table" : "tables"}`
+                            : null,
+                          stats.listCount > 0
+                            ? `${stats.listCount} ${stats.listCount === 1 ? "list" : "lists"}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </p>
+                    )}
                     <div style={{ marginTop: 10 }}>
                       {result?.status === "loading" && (
                         <p
@@ -416,7 +537,20 @@ export default function WorkspacePage() {
                         </p>
                       )}
                       {result?.status === "done" && (
-                        <MarkdownResponse text={result.text ?? ""} />
+                        <AnimatePresence initial={false}>
+                          {!collapsedIds.has(id) && (
+                            <motion.div
+                              key="body"
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                              style={{ overflow: "hidden" }}
+                            >
+                              <MarkdownResponse text={result.text ?? ""} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       )}
                       {result?.status === "error" && (
                         <p
