@@ -6,6 +6,7 @@ import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
 import type { ProviderId } from "@/lib/providers/Provider";
 import { connectionManager } from "@/lib/connections/ConnectionManager";
+import MarkdownResponse from "@/components/workspace/MarkdownResponse";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -52,6 +53,13 @@ export default function WorkspacePage() {
   const [results, setResults] = useState<
     Partial<Record<ProviderId, ExecutionState>>
   >({});
+  const [copiedId, setCopiedId] = useState<ProviderId | null>(null);
+
+  async function handleCopyResponse(id: ProviderId, text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 2000);
+  }
 
   function toggleProvider(id: ProviderId) {
     setSelectedIds((prev) => {
@@ -364,16 +372,37 @@ export default function WorkspacePage() {
                       padding: "16px 18px",
                     }}
                   >
-                    <h2
-                      style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: "0.9rem",
-                        fontWeight: 600,
-                        color: "var(--color-text)",
-                      }}
-                    >
-                      {provider.displayName}
-                    </h2>
+                    <div className="flex items-center justify-between gap-3">
+                      <h2
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.9rem",
+                          fontWeight: 600,
+                          color: "var(--color-text)",
+                        }}
+                      >
+                        {provider.displayName}
+                      </h2>
+                      {result?.status === "done" && result.text && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyResponse(id, result.text ?? "")}
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-text)",
+                            background: "var(--color-glass)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: 999,
+                            padding: "4px 10px",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {copiedId === id ? "Copied" : "Copy Response"}
+                        </button>
+                      )}
+                    </div>
                     <div style={{ marginTop: 10 }}>
                       {result?.status === "loading" && (
                         <p
@@ -387,16 +416,7 @@ export default function WorkspacePage() {
                         </p>
                       )}
                       {result?.status === "done" && (
-                        <p
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.85rem",
-                            color: "var(--color-text)",
-                            whiteSpace: "pre-wrap",
-                          }}
-                        >
-                          {result.text}
-                        </p>
+                        <MarkdownResponse text={result.text ?? ""} />
                       )}
                       {result?.status === "error" && (
                         <p
