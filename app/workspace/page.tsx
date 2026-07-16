@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
@@ -32,6 +32,9 @@ const fadeUp: Variants = {
 type ExecutionState = {
   status: "loading" | "done" | "error";
   error?: string;
+  // The user message currently in flight. Rendered as a pending bubble in
+  // the thread while loading; only committed to the conversation on success.
+  pendingUser?: string;
 };
 
 // The newest assistant turn drives Copy Response and the comparison stats,
@@ -73,6 +76,36 @@ export default function WorkspacePage() {
   >({});
   const [copiedId, setCopiedId] = useState<ProviderId | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<ProviderId>>(new Set());
+  // In-place editing of the latest user message, one provider at a time.
+  const [editing, setEditing] = useState<{
+    id: ProviderId;
+    text: string;
+  } | null>(null);
+
+  // Auto-scroll: only follow new messages when the user is already near the
+  // page bottom. Tracked continuously so a user who scrolled up to read
+  // older turns is never force-scrolled.
+  const nearBottomRef = useRef(true);
+
+  useEffect(() => {
+    function updateNearBottom() {
+      const remaining =
+        document.documentElement.scrollHeight -
+        (window.scrollY + window.innerHeight);
+      nearBottomRef.current = remaining < 150;
+    }
+    updateNearBottom();
+    window.addEventListener("scroll", updateNearBottom, { passive: true });
+    return () => window.removeEventListener("scroll", updateNearBottom);
+  }, []);
+
+  useEffect(() => {
+    if (!nearBottomRef.current) return;
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [conversations, results]);
 
   async function handleCopyResponse(id: ProviderId, text: string) {
     await navigator.clipboard.writeText(text);
@@ -119,75 +152,125 @@ export default function WorkspacePage() {
     });
   }
 
-  const canRun = userPrompt.trim() !== "" && selectedIds.size > 0 && !isRunning;
+  const anyLoading = Object.values(results).some(
+    (result) => result?.status === "loading",
+  );
+  const canRun =
+    userPrompt.trim() !== "" && selectedIds.size > 0 && !isRunning && !anyLoading;
+
+  // The single execution primitive behind Run, Regenerate, and Edit & Resend.
+  // Sends `[...baseConversation, userContent]` to this provider (system
+  // prompt read fresh from the field, never stored in history) and commits
+  // `baseConversation + user + assistant` on success. Failures commit
+  // nothing beyond `baseConversation`, so history is never poisoned.
+  async function executeTurn(
+    id: ProviderId,
+    baseConversation: Message[],
+    userContent: string,
+  ) {
+    setResults((prev) => ({
+      ...prev,
+      [id]: { status: "loading", pendingUser: userContent },
+    }));
+
+    try {
+      const connected = await connectionManager.isConnected(id);
+      if (!connected) {
+        setResults((prev) => ({
+          ...prev,
+          [id]: {
+            status: "error",
+            error: "Not connected. Connect this provider first.",
+          },
+        }));
+        return;
+      }
+
+      const credentials = await connectionManager.get(id);
+      const provider = createProvider(id);
+      const result = await provider!.executePrompt({
+        messages: [
+          ...(systemPrompt
+            ? [{ role: "system" as const, content: systemPrompt }]
+            : []),
+          ...baseConversation,
+          { role: "user" as const, content: userContent },
+        ],
+        credentials: credentials ?? undefined,
+      });
+      setConversations((prev) => ({
+        ...prev,
+        [id]: [
+          ...baseConversation,
+          { role: "user", content: userContent },
+          { role: "assistant", content: result.text },
+        ],
+      }));
+      setResults((prev) => ({
+        ...prev,
+        [id]: { status: "done" },
+      }));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Something went wrong.";
+      if (error instanceof Error && error.name === "AuthenticationError") {
+        await connectionManager.clear(id);
+      }
+      setResults((prev) => ({
+        ...prev,
+        [id]: { status: "error", error: message },
+      }));
+    }
+  }
 
   async function handleRun() {
-    if (userPrompt.trim() === "" || selectedIds.size === 0 || isRunning) return;
+    if (!canRun) return;
 
     const selected = WORKSPACE_PROVIDER_IDS.filter((id) => selectedIds.has(id));
 
     setHasRun(true);
     setIsRunning(true);
-    setResults(
-      Object.fromEntries(selected.map((id) => [id, { status: "loading" as const }])),
-    );
-
     await Promise.allSettled(
-      selected.map(async (id) => {
-        try {
-          const connected = await connectionManager.isConnected(id);
-          if (!connected) {
-            setResults((prev) => ({
-              ...prev,
-              [id]: {
-                status: "error",
-                error: "Not connected. Connect this provider first.",
-              },
-            }));
-            return;
-          }
-
-          const credentials = await connectionManager.get(id);
-          const provider = createProvider(id);
-          // System prompt is read fresh from the field each run (not stored
-          // in history); history holds only this provider's own turns.
-          const result = await provider!.executePrompt({
-            messages: [
-              ...(systemPrompt
-                ? [{ role: "system" as const, content: systemPrompt }]
-                : []),
-              ...(conversations[id] ?? []),
-              { role: "user" as const, content: userPrompt },
-            ],
-            credentials: credentials ?? undefined,
-          });
-          setConversations((prev) => ({
-            ...prev,
-            [id]: [
-              ...(prev[id] ?? []),
-              { role: "user", content: userPrompt },
-              { role: "assistant", content: result.text },
-            ],
-          }));
-          setResults((prev) => ({
-            ...prev,
-            [id]: { status: "done" },
-          }));
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Something went wrong.";
-          if (error instanceof Error && error.name === "AuthenticationError") {
-            await connectionManager.clear(id);
-          }
-          setResults((prev) => ({
-            ...prev,
-            [id]: { status: "error", error: message },
-          }));
-        }
-      }),
+      selected.map((id) => executeTurn(id, conversations[id] ?? [], userPrompt)),
     );
-
     setIsRunning(false);
+  }
+
+  // Regenerate: drop the latest assistant reply and rerun the latest user
+  // message against the history before it. Only this provider is affected.
+  async function handleRegenerate(id: ProviderId) {
+    const conversation = conversations[id] ?? [];
+    const last = conversation[conversation.length - 1];
+    const previous = conversation[conversation.length - 2];
+    if (last?.role !== "assistant" || previous?.role !== "user") return;
+    if (results[id]?.status === "loading") return;
+
+    const base = conversation.slice(0, -2);
+    setConversations((prev) => ({ ...prev, [id]: base }));
+    await executeTurn(id, base, previous.content);
+  }
+
+  // Edit & Resend: replace the latest user message, drop its assistant
+  // reply, and rerun. Older turns are untouched by construction.
+  async function handleEditResend(id: ProviderId, newContent: string) {
+    if (newContent.trim() === "") return;
+    const conversation = conversations[id] ?? [];
+    const last = conversation[conversation.length - 1];
+    const previous = conversation[conversation.length - 2];
+    if (last?.role !== "assistant" || previous?.role !== "user") return;
+    if (results[id]?.status === "loading") return;
+
+    setEditing(null);
+    const base = conversation.slice(0, -2);
+    setConversations((prev) => ({ ...prev, [id]: base }));
+    await executeTurn(id, base, newContent);
+  }
+
+  function handlePromptKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void handleRun();
+    }
   }
 
   const visibleResults = hasRun
@@ -340,6 +423,7 @@ export default function WorkspacePage() {
             <textarea
               value={systemPrompt}
               onChange={(event) => setSystemPrompt(event.target.value)}
+              onKeyDown={handlePromptKeyDown}
               placeholder="Optional instructions to steer every provider's response."
               rows={4}
               className="w-full rounded-lg"
@@ -376,6 +460,7 @@ export default function WorkspacePage() {
             <textarea
               value={userPrompt}
               onChange={(event) => setUserPrompt(event.target.value)}
+              onKeyDown={handlePromptKeyDown}
               placeholder="What do you want to ask every selected provider?"
               rows={6}
               className="w-full rounded-lg"
@@ -506,6 +591,24 @@ export default function WorkspacePage() {
                         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                           <button
                             type="button"
+                            onClick={() => handleRegenerate(id)}
+                            disabled={result?.status === "loading"}
+                            style={{
+                              fontFamily: "var(--font-body)",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text)",
+                              background: "var(--color-glass)",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 999,
+                              padding: "4px 10px",
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            Regenerate
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => startNewConversation(id)}
                             style={{
                               fontFamily: "var(--font-body)",
@@ -586,7 +689,8 @@ export default function WorkspacePage() {
                       </p>
                     )}
                     <div style={{ marginTop: 10 }}>
-                      {conversation.length > 0 && (
+                      {(conversation.length > 0 ||
+                        result?.status === "loading") && (
                         <AnimatePresence initial={false}>
                           {!collapsedIds.has(id) && (
                             <motion.div
@@ -598,46 +702,166 @@ export default function WorkspacePage() {
                               style={{ overflow: "hidden" }}
                             >
                               <div className="flex flex-col gap-3">
-                                {conversation.map((message, index) =>
-                                  message.role === "user" ? (
+                                {conversation.map((message, index) => {
+                                  if (message.role !== "user") {
+                                    return (
+                                      <MarkdownResponse
+                                        key={index}
+                                        text={message.content}
+                                      />
+                                    );
+                                  }
+                                  // Only the latest user message (the one
+                                  // whose assistant reply ends the thread)
+                                  // is editable.
+                                  const isLatestUser =
+                                    index === conversation.length - 2 &&
+                                    conversation[conversation.length - 1]
+                                      ?.role === "assistant";
+                                  const isEditing =
+                                    editing?.id === id && isLatestUser;
+                                  if (isEditing) {
+                                    return (
+                                      <div key={index} className="flex flex-col gap-2">
+                                        <textarea
+                                          value={editing.text}
+                                          onChange={(event) =>
+                                            setEditing({
+                                              id,
+                                              text: event.target.value,
+                                            })
+                                          }
+                                          rows={3}
+                                          className="w-full rounded-lg"
+                                          style={{
+                                            background: "var(--color-glass)",
+                                            border: "1px solid var(--color-border)",
+                                            color: "var(--color-text)",
+                                            padding: "8px 12px",
+                                            fontFamily: "var(--font-body)",
+                                            fontSize: "0.85rem",
+                                            resize: "vertical",
+                                          }}
+                                        />
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleEditResend(id, editing.text)
+                                            }
+                                            style={{
+                                              fontFamily: "var(--font-body)",
+                                              fontSize: "0.75rem",
+                                              color: "var(--color-text)",
+                                              background: "var(--color-glass)",
+                                              border: "1px solid var(--color-border)",
+                                              borderRadius: 999,
+                                              padding: "4px 10px",
+                                              cursor: "pointer",
+                                            }}
+                                          >
+                                            Resend
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditing(null)}
+                                            style={{
+                                              fontFamily: "var(--font-body)",
+                                              fontSize: "0.75rem",
+                                              color: "var(--color-muted)",
+                                              background: "var(--color-glass)",
+                                              border: "1px solid var(--color-border)",
+                                              borderRadius: 999,
+                                              padding: "4px 10px",
+                                              cursor: "pointer",
+                                            }}
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div key={index} className="flex flex-col gap-1">
+                                      <p
+                                        className="rounded-lg"
+                                        style={{
+                                          fontFamily: "var(--font-body)",
+                                          fontSize: "0.85rem",
+                                          color: "var(--color-text)",
+                                          background: "var(--color-glass)",
+                                          border: "1px solid var(--color-border)",
+                                          padding: "8px 12px",
+                                          whiteSpace: "pre-wrap",
+                                        }}
+                                      >
+                                        {message.content}
+                                      </p>
+                                      {isLatestUser &&
+                                        result?.status !== "loading" && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setEditing({
+                                                id,
+                                                text: message.content,
+                                              })
+                                            }
+                                            className="self-start"
+                                            style={{
+                                              fontFamily: "var(--font-body)",
+                                              fontSize: "0.72rem",
+                                              color: "var(--color-muted)",
+                                              background: "transparent",
+                                              border: "none",
+                                              padding: 0,
+                                              cursor: "pointer",
+                                            }}
+                                          >
+                                            Edit
+                                          </button>
+                                        )}
+                                    </div>
+                                  );
+                                })}
+                                {result?.status === "loading" && (
+                                  <>
+                                    {result.pendingUser && (
+                                      <p
+                                        className="rounded-lg"
+                                        style={{
+                                          fontFamily: "var(--font-body)",
+                                          fontSize: "0.85rem",
+                                          color: "var(--color-text)",
+                                          background: "var(--color-glass)",
+                                          border: "1px solid var(--color-border)",
+                                          padding: "8px 12px",
+                                          whiteSpace: "pre-wrap",
+                                        }}
+                                      >
+                                        {result.pendingUser}
+                                      </p>
+                                    )}
                                     <p
-                                      key={index}
-                                      className="rounded-lg"
+                                      className="rounded-lg self-start"
                                       style={{
                                         fontFamily: "var(--font-body)",
                                         fontSize: "0.85rem",
-                                        color: "var(--color-text)",
+                                        color: "var(--color-muted)",
                                         background: "var(--color-glass)",
                                         border: "1px solid var(--color-border)",
                                         padding: "8px 12px",
-                                        whiteSpace: "pre-wrap",
                                       }}
                                     >
-                                      {message.content}
+                                      Thinking...
                                     </p>
-                                  ) : (
-                                    <MarkdownResponse
-                                      key={index}
-                                      text={message.content}
-                                    />
-                                  ),
+                                  </>
                                 )}
                               </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
-                      )}
-                      {result?.status === "loading" && (
-                        <p
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.85rem",
-                            color: "var(--color-muted)",
-                            marginTop: conversation.length > 0 ? 10 : 0,
-                          }}
-                        >
-                          Running...
-                        </p>
                       )}
                       {result?.status === "error" && (
                         <p
