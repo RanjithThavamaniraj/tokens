@@ -22,7 +22,7 @@ import type { LibraryPrompt } from "@/lib/prompts/PromptLibrary";
 // list — everywhere else on this page, behavior is driven by the `Provider`
 // instances themselves (displayName, executePrompt, ...), never by branching
 // on these id strings.
-const WORKSPACE_PROVIDER_IDS: ProviderId[] = ["openai", "claude"];
+const WORKSPACE_PROVIDER_IDS: ProviderId[] = ["openai", "claude", "gemini"];
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 28 },
