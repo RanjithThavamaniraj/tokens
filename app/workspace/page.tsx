@@ -14,7 +14,7 @@ import {
   computeResponseStats,
   type ComparisonEntry,
 } from "@/lib/workspace/responseStats";
-import { computeConsensus, type ConsensusResponse } from "@/lib/workspace/consensus";
+import { computeConsensusV2, type ConsensusResponse } from "@/lib/workspace/consensus";
 import type { LibraryPrompt } from "@/lib/prompts/PromptLibrary";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
@@ -535,7 +535,7 @@ export default function WorkspacePage() {
 
               if (consensusResponses.length < 2) return null;
 
-              const consensus = computeConsensus(consensusResponses);
+              const consensus = computeConsensusV2(consensusResponses);
               return <ConsensusCard result={consensus} />;
             })()}
             {(() => {

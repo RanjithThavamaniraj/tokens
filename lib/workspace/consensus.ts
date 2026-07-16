@@ -269,3 +269,212 @@ function computeCoverage(responses: ConsensusResponse[]): ConsensusCoverage {
     tablesDetected,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Consensus Engine v2 — additional deterministic decision insights.
+//
+// Everything below is ADDITIVE. It reuses computeConsensus (v1) and the
+// private helpers above; it never mutates or recomputes v1's output. Still
+// fully deterministic: no AI, no network, no randomness, no wall-clock time.
+// ---------------------------------------------------------------------------
+
+export type ConfidenceLevel = "High" | "Medium" | "Low";
+
+export interface PartialAgreementGroup {
+  providerNames: string[];
+  terms: string[];
+}
+
+export interface CoverageSummary {
+  providersCompared: number;
+  averageWordCount: number;
+  averageReadingTimeLabel: string;
+  averageCodeBlocks: number; // one decimal place
+  averageTables: number; // one decimal place
+}
+
+export interface ConsensusV2Result {
+  agreementScore: number;
+  decisionConfidence: ConfidenceLevel;
+  confidenceScore: number; // 0-100, for transparency
+  strongAgreement: string[]; // reused from v1: mentioned by ALL providers
+  partialAgreement: PartialAgreementGroup[]; // shared by 2..N-1 providers
+  uniqueInsights: ProviderTerms[]; // mentioned by exactly one provider
+  openQuestions: string[]; // curated topics inconsistently covered; [] if none
+  coverageSummary: CoverageSummary;
+}
+
+function clamp01(value: number): number {
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+// Curated technical concern-topics. A topic can only ever surface as an "open
+// question" when at least one provider actually raised it (so it is provably
+// relevant to THIS discussion) yet not every provider did (so coverage is
+// inconsistent). A topic mentioned by zero providers is NEVER flagged: we
+// cannot deterministically assert it is relevant to an arbitrary prompt
+// without inventing off-domain relevance. Detecting genuinely-absent but
+// domain-relevant topics is where a future AI-powered engine would extend
+// this — deterministic analysis intentionally stops short of guessing.
+const OPEN_QUESTION_TOPICS: { label: string; keywords: string[] }[] = [
+  { label: "Authentication", keywords: ["authentication", "auth", "login", "oauth", "jwt", "session", "credential"] },
+  { label: "Authorization & Security", keywords: ["security", "authorization", "permission", "encryption", "vulnerabilit", "xss", "csrf", "sanitiz"] },
+  { label: "Performance", keywords: ["performance", "latency", "throughput", "optimize", "optimization", "caching", "cache"] },
+  { label: "Error Handling", keywords: ["error handling", "exception", "retry", "fallback", "failure", "catch block", "try/catch"] },
+  { label: "Testing", keywords: ["testing", "unit test", "integration test", "test coverage", "jest", "vitest", "pytest"] },
+  { label: "Deployment", keywords: ["deployment", "deploy", "ci/cd", "docker", "kubernetes", "hosting", "pipeline"] },
+  { label: "Scalability", keywords: ["scalability", "scaling", "scale horizontally", "load balanc", "sharding"] },
+  { label: "Accessibility", keywords: ["accessibility", "a11y", "aria", "screen reader", "wcag"] },
+];
+
+export function computeConsensusV2(responses: ConsensusResponse[]): ConsensusV2Result {
+  // Reuse v1 wholesale — strong agreement, agreement score, and base coverage
+  // all come straight from computeConsensus (no recomputation of those).
+  const v1 = computeConsensus(responses);
+  const totalProviders = responses.length;
+
+  const coverageSummary: CoverageSummary = {
+    providersCompared: v1.coverage.providersCompared,
+    averageWordCount: v1.coverage.averageWordCount,
+    averageReadingTimeLabel: v1.coverage.averageReadingTimeLabel,
+    averageCodeBlocks:
+      totalProviders === 0
+        ? 0
+        : Math.round((v1.coverage.codeBlocksDetected / totalProviders) * 10) / 10,
+    averageTables:
+      totalProviders === 0
+        ? 0
+        : Math.round((v1.coverage.tablesDetected / totalProviders) * 10) / 10,
+  };
+
+  if (totalProviders < 2) {
+    return {
+      agreementScore: v1.agreementScore,
+      decisionConfidence: "Low",
+      confidenceScore: 0,
+      strongAgreement: v1.consensus,
+      partialAgreement: [],
+      uniqueInsights: [],
+      openQuestions: [],
+      coverageSummary,
+    };
+  }
+
+  // Rebuild the salient term sets via the same private helpers v1 uses.
+  const providerSalientSets = responses.map((r) => ({
+    response: r,
+    ...buildSalientSets(tokenize(r.text)),
+  }));
+
+  const documentFrequency = new Map<string, number>();
+  const providersByTerm = new Map<string, number[]>();
+  for (let i = 0; i < providerSalientSets.length; i++) {
+    for (const term of providerSalientSets[i].salient) {
+      documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+      const owners = providersByTerm.get(term);
+      if (owners) {
+        owners.push(i);
+      } else {
+        providersByTerm.set(term, [i]);
+      }
+    }
+  }
+
+  // Partial agreement: terms shared by 2..N-1 providers, grouped by the exact
+  // set of providers that share them ("OpenAI + Claude: caching").
+  const groupTermsByKey = new Map<string, { providerNames: string[]; terms: string[] }>();
+  for (const [term, freq] of documentFrequency) {
+    if (freq < 2 || freq > totalProviders - 1) continue;
+    const owners = providersByTerm.get(term) ?? [];
+    const providerNames = owners.map((i) => providerSalientSets[i].response.displayName);
+    const key = providerNames.join(" + ");
+    const existing = groupTermsByKey.get(key);
+    if (existing) {
+      existing.terms.push(term);
+    } else {
+      groupTermsByKey.set(key, { providerNames, terms: [term] });
+    }
+  }
+  const partialAgreement: PartialAgreementGroup[] = [];
+  for (const { providerNames, terms } of groupTermsByKey.values()) {
+    const ranked = preferBigramsOverUnigrams(rankTerms(terms, documentFrequency)).slice(0, 6);
+    if (ranked.length === 0) continue;
+    partialAgreement.push({ providerNames, terms: ranked });
+  }
+  partialAgreement.sort((a, b) => {
+    const sizeDiff = b.providerNames.length - a.providerNames.length;
+    if (sizeDiff !== 0) return sizeDiff;
+    return a.providerNames.join(" + ").localeCompare(b.providerNames.join(" + "));
+  });
+
+  // Unique insights: terms mentioned by exactly one provider, grouped per
+  // provider (for all N >= 2).
+  const soloByProviderIndex: string[][] = providerSalientSets.map(() => []);
+  for (const [term, freq] of documentFrequency) {
+    if (freq !== 1) continue;
+    const owner = (providersByTerm.get(term) ?? [])[0];
+    if (owner !== undefined) soloByProviderIndex[owner].push(term);
+  }
+  const uniqueInsights: ProviderTerms[] = [];
+  for (let i = 0; i < providerSalientSets.length; i++) {
+    const ranked = preferBigramsOverUnigrams(
+      rankTerms(soloByProviderIndex[i], documentFrequency),
+    ).slice(0, 6);
+    if (ranked.length === 0) continue;
+    uniqueInsights.push({
+      displayName: providerSalientSets[i].response.displayName,
+      terms: ranked,
+    });
+  }
+
+  // Decision confidence: a transparent, deterministic weighted heuristic over
+  // four measurable signals (NOT an inference). Weights are fixed; agreement
+  // dominates because it is the core consensus signal.
+  const agreement = clamp01(v1.agreementScore / 100);
+  const participation = clamp01((totalProviders - 1) / 2); // N=2 -> .5, N>=3 -> 1
+  const completeness = clamp01(v1.coverage.averageWordCount / 250);
+  const structuredCount = responses.filter((r) => {
+    const stats = computeResponseStats(r.text);
+    return stats.codeBlockCount > 0 || stats.tableCount > 0 || stats.listCount > 0;
+  }).length;
+  const structure = totalProviders === 0 ? 0 : structuredCount / totalProviders;
+  const score = 0.4 * agreement + 0.2 * participation + 0.2 * completeness + 0.2 * structure;
+  const confidenceScore = Math.round(score * 100);
+  const decisionConfidence: ConfidenceLevel =
+    score >= 0.66 ? "High" : score >= 0.4 ? "Medium" : "Low";
+
+  // Open questions: curated technical topics raised by SOME but not ALL
+  // providers (inconsistently covered). Never topics with zero mentions.
+  const flaggedTopics: { label: string; providerCount: number }[] = [];
+  for (const topic of OPEN_QUESTION_TOPICS) {
+    let providerCount = 0;
+    for (const r of responses) {
+      const lower = r.text.toLowerCase();
+      if (topic.keywords.some((keyword) => lower.includes(keyword))) {
+        providerCount++;
+      }
+    }
+    if (providerCount >= 1 && providerCount <= totalProviders - 1) {
+      flaggedTopics.push({ label: topic.label, providerCount });
+    }
+  }
+  flaggedTopics.sort((a, b) => {
+    const countDiff = a.providerCount - b.providerCount;
+    if (countDiff !== 0) return countDiff;
+    return a.label.localeCompare(b.label);
+  });
+  const openQuestions = flaggedTopics.slice(0, 6).map((t) => t.label);
+
+  return {
+    agreementScore: v1.agreementScore,
+    decisionConfidence,
+    confidenceScore,
+    strongAgreement: v1.consensus,
+    partialAgreement,
+    uniqueInsights,
+    openQuestions,
+    coverageSummary,
+  };
+}

@@ -1,6 +1,11 @@
 "use client";
 
-import type { ConsensusResult, ProviderTerms } from "@/lib/workspace/consensus";
+import type {
+  ConfidenceLevel,
+  ConsensusV2Result,
+  PartialAgreementGroup,
+  ProviderTerms,
+} from "@/lib/workspace/consensus";
 
 function sectionHeading(text: string) {
   return (
@@ -18,10 +23,10 @@ function sectionHeading(text: string) {
   );
 }
 
-function providerTermsLines(groups: ProviderTerms[], prefix: (displayName: string) => string) {
-  return groups.map((group) => (
+function mutedLine(key: string, text: string) {
+  return (
     <p
-      key={group.displayName}
+      key={key}
       style={{
         fontFamily: "var(--font-body)",
         fontSize: "0.8rem",
@@ -29,26 +34,47 @@ function providerTermsLines(groups: ProviderTerms[], prefix: (displayName: strin
         marginTop: 4,
       }}
     >
-      {prefix(group.displayName)} {group.terms.join(", ")}
+      {text}
     </p>
-  ));
+  );
 }
 
-export default function ConsensusCard({ result }: { result: ConsensusResult }) {
-  const { agreementScore, consensus, differences, uniqueInsights, coverage } = result;
+function providerTermsLines(groups: ProviderTerms[], prefix: (displayName: string) => string) {
+  return groups.map((group) =>
+    mutedLine(group.displayName, `${prefix(group.displayName)} ${group.terms.join(", ")}`),
+  );
+}
 
-  const consensusLabel = coverage.providersCompared === 2 ? "Mentioned by both:" : "Mentioned by all providers:";
+// Dot color for the confidence level — accent for High, progressively dimmer
+// for Medium/Low. Purely presentational.
+const CONFIDENCE_DOT: Record<ConfidenceLevel, string> = {
+  High: "#EE7B30",
+  Medium: "rgba(248,250,252,0.6)",
+  Low: "rgba(248,250,252,0.3)",
+};
+
+export default function ConsensusCard({ result }: { result: ConsensusV2Result }) {
+  const {
+    agreementScore,
+    decisionConfidence,
+    strongAgreement,
+    partialAgreement,
+    uniqueInsights,
+    openQuestions,
+    coverageSummary,
+  } = result;
+
+  const strongLabel =
+    coverageSummary.providersCompared === 2 ? "Mentioned by both:" : "Mentioned by all providers:";
 
   const coverageParts = [
-    `${coverage.providersCompared} ${coverage.providersCompared === 1 ? "provider" : "providers"} compared`,
-    `${coverage.averageWordCount.toLocaleString()} words avg`,
-    coverage.averageReadingTimeLabel,
-    coverage.codeBlocksDetected > 0
-      ? `${coverage.codeBlocksDetected} ${coverage.codeBlocksDetected === 1 ? "code block" : "code blocks"} detected`
+    `${coverageSummary.providersCompared} ${coverageSummary.providersCompared === 1 ? "provider" : "providers"} compared`,
+    `${coverageSummary.averageWordCount.toLocaleString()} words avg`,
+    coverageSummary.averageReadingTimeLabel,
+    coverageSummary.averageCodeBlocks > 0
+      ? `${coverageSummary.averageCodeBlocks} code blocks avg`
       : null,
-    coverage.tablesDetected > 0
-      ? `${coverage.tablesDetected} ${coverage.tablesDetected === 1 ? "table" : "tables"} detected`
-      : null,
+    coverageSummary.averageTables > 0 ? `${coverageSummary.averageTables} tables avg` : null,
   ].filter(Boolean);
 
   return (
@@ -73,7 +99,42 @@ export default function ConsensusCard({ result }: { result: ConsensusResult }) {
         Consensus
       </p>
 
-      <div style={{ marginTop: 8 }}>
+      {/* Decision Confidence — headline decision signal */}
+      <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+        <span
+          aria-hidden="true"
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: CONFIDENCE_DOT[decisionConfidence],
+            flexShrink: 0,
+          }}
+        />
+        <p
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            color: "var(--color-text)",
+          }}
+        >
+          Decision confidence: {decisionConfidence}
+        </p>
+      </div>
+      <p
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: "0.72rem",
+          color: "var(--color-muted)",
+          marginTop: 2,
+        }}
+      >
+        Based on agreement, participation, response length, and structure.
+      </p>
+
+      {/* Agreement score */}
+      <div style={{ marginTop: 10 }}>
         <p
           style={{
             fontFamily: "var(--font-body)",
@@ -103,43 +164,23 @@ export default function ConsensusCard({ result }: { result: ConsensusResult }) {
         </div>
       </div>
 
-      {consensus.length > 0 ? (
+      {/* Strong Agreement */}
+      {sectionHeading("Strong Agreement")}
+      {strongAgreement.length > 0
+        ? mutedLine("strong", `${strongLabel} ${strongAgreement.join(", ")}`)
+        : mutedLine("strong", "No clear consensus detected.")}
+
+      {/* Partial Agreement */}
+      {partialAgreement.length > 0 && (
         <>
-          {sectionHeading("Consensus")}
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: "0.8rem",
-              color: "var(--color-muted)",
-              marginTop: 4,
-            }}
-          >
-            {consensusLabel} {consensus.join(", ")}
-          </p>
-        </>
-      ) : (
-        <>
-          {sectionHeading("Consensus")}
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: "0.8rem",
-              color: "var(--color-muted)",
-              marginTop: 4,
-            }}
-          >
-            No clear consensus detected.
-          </p>
+          {sectionHeading("Partial Agreement")}
+          {partialAgreement.map((group: PartialAgreementGroup) =>
+            mutedLine(group.providerNames.join(" + "), `${group.providerNames.join(" + ")}: ${group.terms.join(", ")}`),
+          )}
         </>
       )}
 
-      {differences.length > 0 && (
-        <>
-          {sectionHeading("Differences")}
-          {providerTermsLines(differences, (name) => `${name}:`)}
-        </>
-      )}
-
+      {/* Unique Insights */}
       {uniqueInsights.length > 0 && (
         <>
           {sectionHeading("Unique Insights")}
@@ -147,6 +188,13 @@ export default function ConsensusCard({ result }: { result: ConsensusResult }) {
         </>
       )}
 
+      {/* Open Questions */}
+      {sectionHeading("Open Questions")}
+      {openQuestions.length > 0
+        ? mutedLine("open", openQuestions.join(", "))
+        : mutedLine("open", "No obvious gaps detected.")}
+
+      {/* Coverage Summary */}
       {sectionHeading("Coverage")}
       <p
         style={{
