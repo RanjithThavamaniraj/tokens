@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
-import type { ProviderId } from "@/lib/providers/Provider";
+import type { Message, ProviderId } from "@/lib/providers/Provider";
 import { connectionManager } from "@/lib/connections/ConnectionManager";
 import MarkdownResponse from "@/components/workspace/MarkdownResponse";
 import {
@@ -31,9 +31,17 @@ const fadeUp: Variants = {
 
 type ExecutionState = {
   status: "loading" | "done" | "error";
-  text?: string;
   error?: string;
 };
+
+// The newest assistant turn drives Copy Response and the comparison stats,
+// preserving their pre-conversation semantics of "the provider's response".
+function lastAssistantText(messages: Message[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") return messages[i].content;
+  }
+  return null;
+}
 
 export default function WorkspacePage() {
   // Stable Provider instances for this milestone's fixed scope. Each id in
@@ -58,6 +66,11 @@ export default function WorkspacePage() {
   const [results, setResults] = useState<
     Partial<Record<ProviderId, ExecutionState>>
   >({});
+  // One independent conversation per provider, session-only. Keyed by
+  // provider id so no provider can ever see another provider's history.
+  const [conversations, setConversations] = useState<
+    Partial<Record<ProviderId, Message[]>>
+  >({});
   const [copiedId, setCopiedId] = useState<ProviderId | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<ProviderId>>(new Set());
 
@@ -75,6 +88,21 @@ export default function WorkspacePage() {
       } else {
         next.add(id);
       }
+      return next;
+    });
+  }
+
+  function startNewConversation(id: ProviderId) {
+    // Clears only this provider's thread — no other provider's state,
+    // connection, or credentials are touched.
+    setConversations((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setResults((prev) => {
+      const next = { ...prev };
+      delete next[id];
       return next;
     });
   }
@@ -121,18 +149,29 @@ export default function WorkspacePage() {
 
           const credentials = await connectionManager.get(id);
           const provider = createProvider(id);
+          // System prompt is read fresh from the field each run (not stored
+          // in history); history holds only this provider's own turns.
           const result = await provider!.executePrompt({
             messages: [
               ...(systemPrompt
                 ? [{ role: "system" as const, content: systemPrompt }]
                 : []),
+              ...(conversations[id] ?? []),
               { role: "user" as const, content: userPrompt },
             ],
             credentials: credentials ?? undefined,
           });
+          setConversations((prev) => ({
+            ...prev,
+            [id]: [
+              ...(prev[id] ?? []),
+              { role: "user", content: userPrompt },
+              { role: "assistant", content: result.text },
+            ],
+          }));
           setResults((prev) => ({
             ...prev,
-            [id]: { status: "done", text: result.text },
+            [id]: { status: "done" },
           }));
         } catch (error) {
           const message =
@@ -383,13 +422,13 @@ export default function WorkspacePage() {
             {(() => {
               const comparisonEntries: ComparisonEntry[] = visibleResults
                 .map((id): ComparisonEntry | null => {
-                  const result = results[id];
-                  if (result?.status !== "done" || !result.text) return null;
+                  const text = lastAssistantText(conversations[id] ?? []);
+                  if (!text) return null;
                   const provider = providers.find((entry) => entry.id === id)!.provider;
                   return {
                     id: id as string,
                     displayName: provider.displayName,
-                    stats: computeResponseStats(result.text),
+                    stats: computeResponseStats(text),
                   };
                 })
                 .filter((entry): entry is ComparisonEntry => entry !== null);
@@ -437,10 +476,11 @@ export default function WorkspacePage() {
               {visibleResults.map((id) => {
                 const provider = providers.find((entry) => entry.id === id)!.provider;
                 const result = results[id];
-                const stats =
-                  result?.status === "done" && result.text
-                    ? computeResponseStats(result.text)
-                    : null;
+                const conversation = conversations[id] ?? [];
+                const latestResponse = lastAssistantText(conversation);
+                const stats = latestResponse
+                  ? computeResponseStats(latestResponse)
+                  : null;
                 return (
                   <div
                     key={id}
@@ -462,11 +502,28 @@ export default function WorkspacePage() {
                       >
                         {provider.displayName}
                       </h2>
-                      {result?.status === "done" && result.text && (
+                      {latestResponse !== null && (
                         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                           <button
                             type="button"
-                            onClick={() => handleCopyResponse(id, result.text ?? "")}
+                            onClick={() => startNewConversation(id)}
+                            style={{
+                              fontFamily: "var(--font-body)",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text)",
+                              background: "var(--color-glass)",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 999,
+                              padding: "4px 10px",
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            New Conversation
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyResponse(id, latestResponse)}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -529,18 +586,7 @@ export default function WorkspacePage() {
                       </p>
                     )}
                     <div style={{ marginTop: 10 }}>
-                      {result?.status === "loading" && (
-                        <p
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: "0.85rem",
-                            color: "var(--color-muted)",
-                          }}
-                        >
-                          Running...
-                        </p>
-                      )}
-                      {result?.status === "done" && (
+                      {conversation.length > 0 && (
                         <AnimatePresence initial={false}>
                           {!collapsedIds.has(id) && (
                             <motion.div
@@ -551,10 +597,47 @@ export default function WorkspacePage() {
                               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                               style={{ overflow: "hidden" }}
                             >
-                              <MarkdownResponse text={result.text ?? ""} />
+                              <div className="flex flex-col gap-3">
+                                {conversation.map((message, index) =>
+                                  message.role === "user" ? (
+                                    <p
+                                      key={index}
+                                      className="rounded-lg"
+                                      style={{
+                                        fontFamily: "var(--font-body)",
+                                        fontSize: "0.85rem",
+                                        color: "var(--color-text)",
+                                        background: "var(--color-glass)",
+                                        border: "1px solid var(--color-border)",
+                                        padding: "8px 12px",
+                                        whiteSpace: "pre-wrap",
+                                      }}
+                                    >
+                                      {message.content}
+                                    </p>
+                                  ) : (
+                                    <MarkdownResponse
+                                      key={index}
+                                      text={message.content}
+                                    />
+                                  ),
+                                )}
+                              </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
+                      )}
+                      {result?.status === "loading" && (
+                        <p
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.85rem",
+                            color: "var(--color-muted)",
+                            marginTop: conversation.length > 0 ? 10 : 0,
+                          }}
+                        >
+                          Running...
+                        </p>
                       )}
                       {result?.status === "error" && (
                         <p
@@ -562,6 +645,7 @@ export default function WorkspacePage() {
                             fontFamily: "var(--font-body)",
                             fontSize: "0.85rem",
                             color: "var(--color-muted)",
+                            marginTop: conversation.length > 0 ? 10 : 0,
                           }}
                         >
                           {result.error}
