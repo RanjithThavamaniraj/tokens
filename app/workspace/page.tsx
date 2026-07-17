@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
@@ -40,6 +40,13 @@ import {
   canGenerateRecommendation,
   type RecommendationState,
 } from "@/lib/workspace/recommendation";
+import ProjectsSidebar from "@/components/workspace/ProjectsSidebar";
+import {
+  emptyProjectWorkspace,
+  projectRepository,
+  type Project,
+  type ProjectWorkspaceState,
+} from "@/lib/projects/ProjectRepository";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -116,6 +123,12 @@ export default function WorkspacePage() {
     [],
   );
 
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState("");
+  const [projectsHydrated, setProjectsHydrated] = useState(false);
+  const skipNextProjectSaveRef = useRef(false);
+  const projectSaveTimeoutRef = useRef<number | null>(null);
+
   const [selectedIds, setSelectedIds] = useState<Set<ProviderId>>(
     () => new Set(WORKSPACE_PROVIDER_IDS),
   );
@@ -172,6 +185,147 @@ export default function WorkspacePage() {
     useState<RecommendationState | null>(null);
   const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
   const [recommendationCopied, setRecommendationCopied] = useState(false);
+
+  const buildProjectSnapshot = useCallback((): ProjectWorkspaceState => {
+    const completedReviews = Object.fromEntries(
+      Object.entries(reviews).map(([providerId, entries]) => [
+        providerId,
+        (entries ?? []).filter(
+          (entry) => entry.status === "done" || entry.status === "error",
+        ),
+      ]),
+    ) as ProjectWorkspaceState["reviews"];
+
+    const completedDebate =
+      debate?.status === "complete"
+        ? {
+            status: "complete" as const,
+            round1: debate.round1.map((entry) => ({
+              ...entry,
+              status:
+                entry.status === "done"
+                  ? ("done" as const)
+                  : ("error" as const),
+            })),
+            round2: debate.round2.map((entry) => ({
+              ...entry,
+              status:
+                entry.status === "done"
+                  ? ("done" as const)
+                  : ("error" as const),
+            })),
+          }
+        : null;
+
+    return {
+      selectedProviderIds: [...selectedIds],
+      systemPrompt,
+      userPrompt,
+      conversations,
+      reviews: completedReviews,
+      debate: completedDebate,
+      recommendationProviderId,
+      recommendation:
+        recommendation?.status === "done" ? recommendation : null,
+    };
+  }, [
+    conversations,
+    debate,
+    recommendation,
+    recommendationProviderId,
+    reviews,
+    selectedIds,
+    systemPrompt,
+    userPrompt,
+  ]);
+
+  const applyProjectSnapshot = useCallback(
+    (snapshot: ProjectWorkspaceState) => {
+      const selected = snapshot.selectedProviderIds.filter((id) =>
+        WORKSPACE_PROVIDER_IDS.includes(id),
+      );
+      setSelectedIds(
+        new Set(selected.length > 0 ? selected : WORKSPACE_PROVIDER_IDS),
+      );
+      setSystemPrompt(snapshot.systemPrompt);
+      setUserPrompt(snapshot.userPrompt);
+      setConversations(snapshot.conversations);
+      setReviews(snapshot.reviews as Partial<Record<ProviderId, ReviewEntry[]>>);
+      setDebate(snapshot.debate as DebateState | null);
+      setRecommendationProviderId(snapshot.recommendationProviderId);
+      setRecommendation(snapshot.recommendation);
+
+      const completedResults = Object.fromEntries(
+        Object.entries(snapshot.conversations)
+          .filter(([, messages]) => messages && messages.length > 0)
+          .map(([providerId]) => [providerId, { status: "done" as const }]),
+      ) as Partial<Record<ProviderId, ExecutionState>>;
+      setResults(completedResults);
+      setHasRun(Object.keys(completedResults).length > 0);
+
+      setIsRunning(false);
+      setCopiedId(null);
+      setCollapsedIds(new Set());
+      setEditing(null);
+      setReviewDialogFor(null);
+      setReviewCollapsedIds(new Set());
+      setReviewCopiedId(null);
+      setDebateCollapsedKeys(new Set());
+      setDebateCopiedKey(null);
+      setRecommendationCollapsed(false);
+      setRecommendationCopied(false);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void projectRepository.initialize().then((session) => {
+      if (cancelled) return;
+      skipNextProjectSaveRef.current = true;
+      setProjects(session.projects);
+      setActiveProjectId(session.activeProjectId);
+      applyProjectSnapshot(session.workspace);
+      setProjectsHydrated(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyProjectSnapshot]);
+
+  useEffect(() => {
+    if (!projectsHydrated || !activeProjectId) return;
+    if (skipNextProjectSaveRef.current) {
+      skipNextProjectSaveRef.current = false;
+      return;
+    }
+
+    projectSaveTimeoutRef.current = window.setTimeout(() => {
+      void projectRepository
+        .save(activeProjectId, buildProjectSnapshot())
+        .then((updated) => {
+          if (!updated) return;
+          setProjects((current) =>
+            current.map((project) =>
+              project.id === updated.id ? updated : project,
+            ),
+          );
+        });
+    }, 250);
+
+    return () => {
+      if (projectSaveTimeoutRef.current !== null) {
+        window.clearTimeout(projectSaveTimeoutRef.current);
+        projectSaveTimeoutRef.current = null;
+      }
+    };
+  }, [
+    activeProjectId,
+    buildProjectSnapshot,
+    projectsHydrated,
+  ]);
 
   // Auto-scroll: only follow new messages when the user is already near the
   // page bottom. Tracked continuously so a user who scrolled up to read
@@ -615,6 +769,115 @@ export default function WorkspacePage() {
     });
   }
 
+  const projectOperationsDisabled =
+    isRunning ||
+    Object.values(results).some((result) => result?.status === "loading") ||
+    Object.values(reviews).some((entries) =>
+      entries?.some((entry) => entry.status === "loading"),
+    ) ||
+    (debate !== null && debate.status !== "complete") ||
+    recommendation?.status === "loading";
+
+  async function saveActiveProject() {
+    if (!activeProjectId) return;
+    if (projectSaveTimeoutRef.current !== null) {
+      window.clearTimeout(projectSaveTimeoutRef.current);
+      projectSaveTimeoutRef.current = null;
+    }
+    const updated = await projectRepository.save(
+      activeProjectId,
+      buildProjectSnapshot(),
+    );
+    if (!updated) return;
+    setProjects((current) =>
+      current.map((project) =>
+        project.id === updated.id ? updated : project,
+      ),
+    );
+  }
+
+  async function handleCreateProject(name: string) {
+    if (projectOperationsDisabled) return;
+    await saveActiveProject();
+    const stored = await projectRepository.create(name);
+    await projectRepository.setActive(stored.project.id);
+
+    skipNextProjectSaveRef.current = true;
+    setProjects((current) => [...current, stored.project]);
+    setActiveProjectId(stored.project.id);
+    applyProjectSnapshot(stored.workspace);
+  }
+
+  async function handleSelectProject(projectId: string) {
+    if (
+      projectOperationsDisabled ||
+      !projectId ||
+      projectId === activeProjectId
+    ) {
+      return;
+    }
+
+    await saveActiveProject();
+    const workspace = await projectRepository.get(projectId);
+    if (!workspace) return;
+    await projectRepository.setActive(projectId);
+
+    skipNextProjectSaveRef.current = true;
+    setActiveProjectId(projectId);
+    applyProjectSnapshot(workspace);
+  }
+
+  async function handleRenameProject(projectId: string, name: string) {
+    if (projectOperationsDisabled || !name.trim()) return;
+    const updated = await projectRepository.rename(projectId, name);
+    if (!updated) return;
+    setProjects((current) =>
+      current.map((project) =>
+        project.id === updated.id ? updated : project,
+      ),
+    );
+  }
+
+  async function handleDeleteProject(projectId: string) {
+    if (projectOperationsDisabled) return;
+    const project = projects.find((entry) => entry.id === projectId);
+    if (!project) return;
+    if (!window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    if (projectId !== activeProjectId) {
+      await projectRepository.delete(projectId);
+      setProjects((current) =>
+        current.filter((entry) => entry.id !== projectId),
+      );
+      return;
+    }
+
+    const remaining = projects.filter((entry) => entry.id !== projectId);
+    await projectRepository.delete(projectId);
+
+    if (remaining.length > 0) {
+      const nextProject = remaining[0];
+      const workspace =
+        (await projectRepository.get(nextProject.id)) ??
+        emptyProjectWorkspace();
+      await projectRepository.setActive(nextProject.id);
+      skipNextProjectSaveRef.current = true;
+      setProjects(remaining);
+      setActiveProjectId(nextProject.id);
+      applyProjectSnapshot(workspace);
+      return;
+    }
+
+    const stored = await projectRepository.create("My Project");
+    await projectRepository.setActive(stored.project.id);
+    skipNextProjectSaveRef.current = true;
+    setProjects([stored.project]);
+    setActiveProjectId(stored.project.id);
+    applyProjectSnapshot(stored.workspace);
+  }
+
   function startNewConversation(id: ProviderId) {
     // Clears only this provider's thread — no other provider's state,
     // connection, or credentials are touched.
@@ -789,6 +1052,21 @@ export default function WorkspacePage() {
     ? WORKSPACE_PROVIDER_IDS.filter((id) => selectedIds.has(id))
     : [];
 
+  if (!projectsHydrated) {
+    return (
+      <main
+        style={{
+          fontFamily: "var(--font-body)",
+          color: "var(--color-text)",
+          background: "var(--color-bg)",
+          minHeight: "100vh",
+        }}
+      >
+        <Navbar />
+      </main>
+    );
+  }
+
   return (
     <main
       style={{
@@ -804,6 +1082,25 @@ export default function WorkspacePage() {
         className="mx-auto w-full max-w-[1280px] px-5 sm:px-8"
         style={{ paddingTop: "clamp(48px, 8vw, 96px)", paddingBottom: 96 }}
       >
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+          <ProjectsSidebar
+            projects={projects}
+            activeProjectId={activeProjectId}
+            disabled={projectOperationsDisabled}
+            onCreate={(name) => {
+              void handleCreateProject(name);
+            }}
+            onRename={(projectId, name) => {
+              void handleRenameProject(projectId, name);
+            }}
+            onDelete={(projectId) => {
+              void handleDeleteProject(projectId);
+            }}
+            onSelect={(projectId) => {
+              void handleSelectProject(projectId);
+            }}
+          />
+          <div className="min-w-0 flex-1">
         <motion.div
           custom={0}
           variants={fadeUp}
@@ -1600,6 +1897,8 @@ export default function WorkspacePage() {
             })()}
           </motion.div>
         )}
+          </div>
+        </div>
       </div>
     </main>
   );
