@@ -86,60 +86,6 @@ export default function HeroSection({
       </div>
 
       <div
-        className="hidden md:block"
-        style={{
-          position: "fixed",
-          top: 24,
-          right: 24,
-          width: 160,
-          background: "rgba(8,8,8,0.75)",
-          border: "0.5px solid rgba(255,255,255,0.08)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          borderRadius: 10,
-          padding: "14px 16px",
-          zIndex: 20,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 9,
-            color: "#f5a623",
-            letterSpacing: "0.18em",
-          }}
-        >
-          TOKENS REMAINING
-        </div>
-        <div
-          style={{
-            fontSize: 36,
-            fontWeight: 700,
-            color: "#ffffff",
-          }}
-        >
-          90%
-        </div>
-        <div
-          style={{
-            height: 2,
-            width: "100%",
-            background: "rgba(255,255,255,0.1)",
-            borderBottom: "2px solid #f5a623",
-            marginTop: 8,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: "90%",
-              background: "#f5a623",
-            }}
-          />
-        </div>
-      </div>
-
-      <div
         className="absolute z-10 flex flex-col items-center text-center w-full bottom-[calc(14%-50px)] md:bottom-[calc(18%-50px)]"
         style={{
           left: "50%",
