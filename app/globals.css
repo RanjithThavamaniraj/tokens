@@ -2,7 +2,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;800&display=swap");
 @import "tailwindcss";
 
-:root {
+:root,
+:root[data-theme="dark"] {
   --font-heading: "Helvetica Now Display Bold", sans-serif;
   --font-body: "Inter", sans-serif;
   --color-bg: #06070b;
@@ -11,6 +12,15 @@
   --color-muted: rgba(248, 250, 252, 0.72);
   --color-glass: rgba(255, 255, 255, 0.05);
   --color-border: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f4f5f7;
+  --color-text: #12141a;
+  --color-accent: #d96a1f;
+  --color-muted: rgba(18, 20, 26, 0.68);
+  --color-glass: rgba(18, 20, 26, 0.04);
+  --color-border: rgba(18, 20, 26, 0.1);
 }
 
 body {

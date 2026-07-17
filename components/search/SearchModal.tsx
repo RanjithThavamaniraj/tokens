@@ -7,10 +7,12 @@ import {
   searchEngine,
 } from "@/lib/search/SearchEngine";
 import type { SearchResultItem } from "@/lib/search/types";
+import { useSettings } from "@/lib/settings/SettingsContext";
 import SearchResult from "./SearchResult";
 
 export default function SearchModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { settings, rememberSearch } = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [indexVersion, setIndexVersion] = useState(0);
@@ -36,13 +38,24 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
     [groups],
   );
 
+  const recentSearches =
+    settings.rememberRecentSearches && !query.trim()
+      ? settings.recentSearches
+      : [];
+
   function handleSelect(item: SearchResultItem) {
+    if (query.trim()) void rememberSearch(query);
     requestSearchNavigation({
       projectId: item.document.projectId,
       anchor: item.document.anchor,
     });
     onClose();
     router.push("/workspace");
+  }
+
+  function handleRecentSelect(recent: string) {
+    setQuery(recent);
+    setActiveIndex(0);
   }
 
   function handleKeyDown(event: React.KeyboardEvent) {
@@ -139,19 +152,56 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
           style={{ maxHeight: "min(52vh, 480px)", overflowY: "auto", padding: 8 }}
         >
           {groups.length === 0 ? (
-            <p
-              style={{
-                fontFamily: "var(--font-body)",
-                fontSize: "0.82rem",
-                color: "var(--color-muted)",
-                padding: "18px 12px",
-                textAlign: "center",
-              }}
-            >
-              {query.trim()
-                ? "No matches found."
-                : "Type to search projects, prompts, responses, recommendations, and more."}
-            </p>
+            recentSearches.length > 0 ? (
+              <div>
+                <p
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.68rem",
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--color-muted)",
+                    padding: "6px 12px 4px",
+                  }}
+                >
+                  Recent
+                </p>
+                {recentSearches.map((recent) => (
+                  <button
+                    key={recent}
+                    type="button"
+                    onClick={() => handleRecentSelect(recent)}
+                    className="w-full rounded-lg text-left"
+                    style={{
+                      background: "transparent",
+                      border: "1px solid transparent",
+                      padding: "8px 12px",
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.85rem",
+                      color: "var(--color-text)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {recent}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: "0.82rem",
+                  color: "var(--color-muted)",
+                  padding: "18px 12px",
+                  textAlign: "center",
+                }}
+              >
+                {query.trim()
+                  ? "No matches found."
+                  : "Type to search projects, prompts, responses, recommendations, and more."}
+              </p>
+            )
           ) : (
             groups.map((group) => {
               const groupStart = itemOffset;

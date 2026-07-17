@@ -13,7 +13,7 @@ import {
 } from "docx";
 import { parseMarkdownBlocks } from "./markdownBlocks";
 import type { ExportDocument } from "./types";
-import { exportToMarkdown } from "./MarkdownExporter";
+import { exportToMarkdown, type MarkdownExportOptions } from "./MarkdownExporter";
 
 const HEADING_LEVELS = {
   1: HeadingLevel.HEADING_1,
@@ -43,8 +43,11 @@ function cell(text: string, bold = false): TableCell {
  * Client-side DOCX generation from the shared Markdown representation.
  * Preserves headings, paragraphs, lists, code blocks, tables, and quotes.
  */
-export async function exportToDocx(document: ExportDocument): Promise<Blob> {
-  const markdown = exportToMarkdown(document);
+export async function exportToDocx(
+  document: ExportDocument,
+  options: MarkdownExportOptions = {},
+): Promise<Blob> {
+  const markdown = exportToMarkdown(document, options);
   const blocks = parseMarkdownBlocks(markdown);
   const children: (Paragraph | Table)[] = [];
 

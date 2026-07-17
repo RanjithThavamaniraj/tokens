@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { parseMarkdownBlocks } from "./markdownBlocks";
 import type { ExportDocument } from "./types";
-import { exportToMarkdown } from "./MarkdownExporter";
+import { exportToMarkdown, type MarkdownExportOptions } from "./MarkdownExporter";
 
 const MARGIN = 48;
 const PAGE_WIDTH = 612;
@@ -23,8 +23,11 @@ function wrapText(
  * Client-side PDF generation. Typography stays simple and professional:
  * headings, body text, lists, code (monospaced), tables, and quotes.
  */
-export async function exportToPdf(document: ExportDocument): Promise<Blob> {
-  const markdown = exportToMarkdown(document);
+export async function exportToPdf(
+  document: ExportDocument,
+  options: MarkdownExportOptions = {},
+): Promise<Blob> {
+  const markdown = exportToMarkdown(document, options);
   const blocks = parseMarkdownBlocks(markdown);
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   let y = MARGIN;

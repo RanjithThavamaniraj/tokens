@@ -58,6 +58,8 @@ import {
 } from "@/lib/search/SearchEngine";
 import ExportDialog from "@/components/export/ExportDialog";
 import type { ExportSource } from "@/lib/export/types";
+import { useSettings } from "@/lib/settings/SettingsContext";
+import { useRouter } from "next/navigation";
 
 // Real, executable providers supported by the workspace runner. Behavior is
 // driven by Provider instances; this fixed order only controls presentation.
@@ -143,6 +145,9 @@ function formatTokenUsage(usage?: ProviderTokenUsage): string | null {
 }
 
 export default function WorkspacePage() {
+  const router = useRouter();
+  const { settings } = useSettings();
+
   // Stable Provider instances for this milestone's fixed scope. Each id in
   // WORKSPACE_PROVIDER_IDS is guaranteed registered in the factory, so the
   // non-null assertion here is safe.
@@ -171,7 +176,10 @@ export default function WorkspacePage() {
     Partial<Record<ProviderId, string>>
   >(() =>
     Object.fromEntries(
-      providers.map(({ id, provider }) => [id, provider.defaultModelId]),
+      providers.map(({ id, provider }) => [
+        id,
+        settings.defaultModelIds[id] ?? provider.defaultModelId,
+      ]),
     ),
   );
   const [modelsLoadingIds, setModelsLoadingIds] = useState<Set<ProviderId>>(
@@ -231,7 +239,14 @@ export default function WorkspacePage() {
   // debate, and consensus — those features are inputs only. Session-only
   // React state; never appended to any provider conversation.
   const [recommendationProviderId, setRecommendationProviderId] =
-    useState<ProviderId>("openai");
+    useState<ProviderId>(
+      () =>
+        (WORKSPACE_PROVIDER_IDS.includes(
+          settings.defaultProviderId as ProviderId,
+        )
+          ? settings.defaultProviderId
+          : "openai") as ProviderId,
+    );
   const [recommendation, setRecommendation] =
     useState<RecommendationState | null>(null);
   const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
@@ -245,6 +260,7 @@ export default function WorkspacePage() {
   >(null);
   const searchHighlightTimeoutRef = useRef<number | null>(null);
   const searchNavigationRef = useRef<() => void>(() => {});
+  const createProjectRef = useRef<(name: string) => void>(() => {});
   const [exportOpen, setExportOpen] = useState(false);
 
   const buildProjectSnapshot = useCallback((): ProjectWorkspaceState => {
@@ -952,7 +968,18 @@ export default function WorkspacePage() {
     skipNextProjectSaveRef.current = true;
     setProjects((current) => [...current, stored.project]);
     setActiveProjectId(stored.project.id);
-    applyProjectSnapshot(stored.workspace);
+    applyProjectSnapshot({
+      ...stored.workspace,
+      selectedModelIds: {
+        ...settings.defaultModelIds,
+        ...stored.workspace.selectedModelIds,
+      },
+      recommendationProviderId: (WORKSPACE_PROVIDER_IDS.includes(
+        settings.defaultProviderId as ProviderId,
+      )
+        ? settings.defaultProviderId
+        : stored.workspace.recommendationProviderId) as ProviderId,
+    });
   }
 
   async function handleSelectProject(projectId: string) {
@@ -1010,6 +1037,12 @@ export default function WorkspacePage() {
   });
 
   useEffect(() => {
+    createProjectRef.current = (name: string) => {
+      void handleCreateProject(name);
+    };
+  });
+
+  useEffect(() => {
     if (!projectsHydrated) return;
     // Arriving from another page: the handoff is already in sessionStorage.
     searchNavigationRef.current();
@@ -1018,6 +1051,57 @@ export default function WorkspacePage() {
     window.addEventListener(SEARCH_NAVIGATE_EVENT, listener);
     return () => window.removeEventListener(SEARCH_NAVIGATE_EVENT, listener);
   }, [projectsHydrated]);
+
+  useEffect(() => {
+    function isTypingTarget(target: EventTarget | null): boolean {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target.isContentEditable
+      );
+    }
+
+    function handleShortcut(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+
+      if (event.key === "?") {
+        event.preventDefault();
+        router.push("/settings#keyboard");
+        return;
+      }
+
+      if (event.key === "e" || event.key === "E") {
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        event.preventDefault();
+        setExportOpen(true);
+        return;
+      }
+
+      if (event.key === "N" && event.shiftKey) {
+        event.preventDefault();
+        const name = window.prompt("Project name");
+        if (name?.trim()) createProjectRef.current(name.trim());
+        return;
+      }
+
+      if (event.key === "n" && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        setConversations({});
+        setResults({});
+        setHasRun(false);
+        setReviews({});
+        setDebate(null);
+        setRecommendation(null);
+        setUserPrompt("");
+      }
+    }
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [projectsHydrated, router]);
 
   async function handleRenameProject(projectId: string, name: string) {
     if (projectOperationsDisabled || !name.trim()) return;
@@ -1180,6 +1264,11 @@ export default function WorkspacePage() {
               streamedText,
             },
           }));
+          if (settings.autoScrollWhileStreaming) {
+            document
+              .getElementById(`search-anchor-response-${id}`)
+              ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
         },
       });
       if (abortControllersRef.current[id] !== controller) return;
@@ -1699,7 +1788,7 @@ export default function WorkspacePage() {
 
               const summaryLines = buildComparisonSummary(comparisonEntries);
 
-              return summaryLines.length > 0 ? (
+              return settings.showResponseStatistics && summaryLines.length > 0 ? (
                 <div
                   className="rounded-lg"
                   style={{
@@ -1747,6 +1836,7 @@ export default function WorkspacePage() {
                   : null;
                 const isSearchHighlighted =
                   searchHighlightAnchor === `response-${id}`;
+                const cardPadding = settings.compactMode ? "10px 12px" : "16px 18px";
                 return (
                   <div
                     key={id}
@@ -1762,7 +1852,7 @@ export default function WorkspacePage() {
                         : "none",
                       transition:
                         "border-color 0.3s ease, box-shadow 0.3s ease",
-                      padding: "16px 18px",
+                      padding: cardPadding,
                     }}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -1902,7 +1992,7 @@ export default function WorkspacePage() {
                         onCancel={() => setReviewDialogFor(null)}
                       />
                     )}
-                    {stats && (
+                    {settings.showResponseStatistics && stats && (
                       <p
                         style={{
                           fontFamily: "var(--font-body)",

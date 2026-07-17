@@ -1,9 +1,9 @@
 import type { ProviderId } from "@/lib/providers/Provider";
 import { reviewFocusLabel } from "@/lib/workspace/review";
+import { exportToMarkdown, type MarkdownExportOptions } from "./MarkdownExporter";
+import { exportToPdf } from "./PdfExporter";
 import { exportToDocx } from "./DocxExporter";
 import { exportToJsonString } from "./JsonExporter";
-import { exportToMarkdown } from "./MarkdownExporter";
-import { exportToPdf } from "./PdfExporter";
 import type {
   ExportDocument,
   ExportFormat,
@@ -198,6 +198,7 @@ export async function runExport(
   source: ExportSource,
   scope: ExportScope,
   format: ExportFormat,
+  options: MarkdownExportOptions = {},
 ): Promise<void> {
   const validation = canExportScope(source, scope);
   if (!validation.ok) {
@@ -206,10 +207,14 @@ export async function runExport(
 
   const document = buildExportDocument(source, scope);
   const baseName = `${slugify(source.project.name) || "tokens"}-${scope}`;
+  const markdownOptions: MarkdownExportOptions = {
+    includeTimestamps: options.includeTimestamps ?? true,
+    includeProviderMetadata: options.includeProviderMetadata ?? true,
+  };
 
   switch (format) {
     case "markdown": {
-      const markdown = exportToMarkdown(document);
+      const markdown = exportToMarkdown(document, markdownOptions);
       downloadBlob(
         new Blob([markdown], { type: "text/markdown;charset=utf-8" }),
         `${baseName}.md`,
@@ -225,11 +230,17 @@ export async function runExport(
       return;
     }
     case "pdf": {
-      downloadBlob(await exportToPdf(document), `${baseName}.pdf`);
+      downloadBlob(
+        await exportToPdf(document, markdownOptions),
+        `${baseName}.pdf`,
+      );
       return;
     }
     case "docx": {
-      downloadBlob(await exportToDocx(document), `${baseName}.docx`);
+      downloadBlob(
+        await exportToDocx(document, markdownOptions),
+        `${baseName}.docx`,
+      );
       return;
     }
   }

@@ -6,6 +6,7 @@ import {
   runExport,
 } from "@/lib/export/ExportService";
 import type { ExportFormat, ExportScope, ExportSource } from "@/lib/export/types";
+import { useSettings } from "@/lib/settings/SettingsContext";
 import ExportOptions from "./ExportOptions";
 
 export default function ExportDialog({
@@ -15,8 +16,11 @@ export default function ExportDialog({
   source: ExportSource;
   onClose: () => void;
 }) {
+  const { settings } = useSettings();
   const [scope, setScope] = useState<ExportScope>("conversation");
-  const [format, setFormat] = useState<ExportFormat>("markdown");
+  const [format, setFormat] = useState<ExportFormat>(
+    settings.defaultExportFormat,
+  );
   const [status, setStatus] = useState<"idle" | "exporting" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -35,7 +39,10 @@ export default function ExportDialog({
     setStatus("exporting");
     setErrorMessage(null);
     try {
-      await runExport(source, scope, format);
+      await runExport(source, scope, format, {
+        includeTimestamps: settings.includeTimestamps,
+        includeProviderMetadata: settings.includeProviderMetadata,
+      });
       onClose();
     } catch (error) {
       setStatus("error");
