@@ -34,6 +34,12 @@ import {
   computeDebateRing,
   type DebateParticipant,
 } from "@/lib/workspace/debate";
+import RecommendationPanel from "@/components/workspace/RecommendationPanel";
+import {
+  buildRecommendationMessages,
+  canGenerateRecommendation,
+  type RecommendationState,
+} from "@/lib/workspace/recommendation";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -156,6 +162,16 @@ export default function WorkspacePage() {
     new Set(),
   );
   const [debateCopiedKey, setDebateCopiedKey] = useState<string | null>(null);
+
+  // Final recommendation is fully independent of conversations, reviews,
+  // debate, and consensus — those features are inputs only. Session-only
+  // React state; never appended to any provider conversation.
+  const [recommendationProviderId, setRecommendationProviderId] =
+    useState<ProviderId>("openai");
+  const [recommendation, setRecommendation] =
+    useState<RecommendationState | null>(null);
+  const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
+  const [recommendationCopied, setRecommendationCopied] = useState(false);
 
   // Auto-scroll: only follow new messages when the user is already near the
   // page bottom. Tracked continuously so a user who scrolled up to read
@@ -317,6 +333,122 @@ export default function WorkspacePage() {
       () => setDebateCopiedKey((current) => (current === key ? null : current)),
       2000,
     );
+  }
+
+  async function handleCopyRecommendation(text: string) {
+    await navigator.clipboard.writeText(text);
+    setRecommendationCopied(true);
+    setTimeout(() => setRecommendationCopied(false), 2000);
+  }
+
+  // Exactly ONE additional provider request. Builds a synthesis prompt from
+  // already-computed in-memory results and calls the user-selected provider
+  // via callProviderOnce — never touches conversations, reviews, debate, or
+  // consensus state.
+  async function runRecommendation() {
+    const providerResponses = visibleResults
+      .map((id) => {
+        const text = lastAssistantText(conversations[id] ?? []);
+        if (!text) return null;
+        const provider = providers.find((entry) => entry.id === id)!.provider;
+        return {
+          id: id as string,
+          displayName: provider.displayName,
+          text,
+        };
+      })
+      .filter(
+        (entry): entry is { id: string; displayName: string; text: string } =>
+          entry !== null,
+      );
+
+    const validation = canGenerateRecommendation(providerResponses.length);
+    if (!validation.ok) return;
+    if (recommendation?.status === "loading") return;
+
+    const consensus = computeConsensusV2(providerResponses);
+
+    const originalUserPrompt =
+      providerResponses
+        .map((response) => {
+          const conversation =
+            conversations[response.id as ProviderId] ?? [];
+          const last = conversation[conversation.length - 1];
+          if (last?.role !== "assistant") return "";
+          const prev = conversation[conversation.length - 2];
+          return prev?.role === "user" ? prev.content : "";
+        })
+        .find((prompt) => prompt.length > 0) ?? userPrompt.trim();
+
+    const completedReviews = visibleResults.flatMap((id) => {
+      const providerReviews = reviews[id] ?? [];
+      const latest = providerReviews[providerReviews.length - 1];
+      if (!latest || latest.status !== "done" || !latest.text) return [];
+      const reviewee = providers.find((entry) => entry.id === id)!.provider;
+      const reviewer = providers.find(
+        (entry) => entry.id === latest.reviewerId,
+      )!.provider;
+      return [
+        {
+          revieweeDisplayName: reviewee.displayName,
+          reviewerDisplayName: reviewer.displayName,
+          focusLabel: reviewFocusLabel(latest.focus),
+          text: latest.text,
+        },
+      ];
+    });
+
+    const debateInput =
+      debate && debate.status === "complete"
+        ? {
+            critiques: debate.round1
+              .filter((entry) => entry.status === "done" && entry.text)
+              .map((entry) => ({
+                reviewerDisplayName: entry.reviewerDisplayName,
+                revieweeDisplayName: entry.revieweeDisplayName,
+                text: entry.text!,
+              })),
+            rebuttals: debate.round2
+              .filter((entry) => entry.status === "done" && entry.text)
+              .map((entry) => ({
+                providerDisplayName: entry.providerDisplayName,
+                text: entry.text!,
+              })),
+          }
+        : undefined;
+
+    const messages = buildRecommendationMessages({
+      originalUserPrompt,
+      providerResponses,
+      consensus,
+      reviews: completedReviews.length > 0 ? completedReviews : undefined,
+      debate:
+        debateInput &&
+        (debateInput.critiques.length > 0 || debateInput.rebuttals.length > 0)
+          ? debateInput
+          : undefined,
+    });
+
+    setRecommendationCollapsed(false);
+    setRecommendation({
+      providerId: recommendationProviderId,
+      status: "loading",
+    });
+
+    const result = await callProviderOnce(recommendationProviderId, messages);
+    if (result.ok) {
+      setRecommendation({
+        providerId: recommendationProviderId,
+        status: "done",
+        text: result.text,
+      });
+    } else {
+      setRecommendation({
+        providerId: recommendationProviderId,
+        status: "error",
+        error: result.error,
+      });
+    }
   }
 
   // Minimal duplicate of executeTurn's connect/credentials/executePrompt/error
@@ -1419,6 +1551,51 @@ export default function WorkspacePage() {
                     />
                   )}
                 </div>
+              );
+            })()}
+            {(() => {
+              const completedCount = visibleResults.filter((id) => {
+                const text = lastAssistantText(conversations[id] ?? []);
+                return text !== null;
+              }).length;
+              const validation = canGenerateRecommendation(completedCount);
+              const anyResultLoading = Object.values(results).some(
+                (r) => r?.status === "loading",
+              );
+              const canGenerate =
+                validation.ok &&
+                !anyResultLoading &&
+                recommendation?.status !== "loading";
+
+              return (
+                <RecommendationPanel
+                  providerOptions={providers.map((entry) => ({
+                    id: entry.id,
+                    displayName: entry.provider.displayName,
+                  }))}
+                  selectedProviderId={recommendationProviderId}
+                  onSelectProvider={setRecommendationProviderId}
+                  canGenerate={canGenerate}
+                  disabledReason={
+                    !validation.ok
+                      ? validation.reason
+                      : anyResultLoading
+                        ? "Wait for provider responses to finish before generating a recommendation."
+                        : undefined
+                  }
+                  recommendation={recommendation}
+                  onGenerate={() => {
+                    void runRecommendation();
+                  }}
+                  collapsed={recommendationCollapsed}
+                  onToggleCollapse={() =>
+                    setRecommendationCollapsed((prev) => !prev)
+                  }
+                  copied={recommendationCopied}
+                  onCopy={() =>
+                    handleCopyRecommendation(recommendation?.text ?? "")
+                  }
+                />
               );
             })()}
           </motion.div>
