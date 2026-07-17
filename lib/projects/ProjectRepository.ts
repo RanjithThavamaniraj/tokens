@@ -79,6 +79,8 @@ export interface ProjectSession {
 
 export interface ProjectRepository {
   initialize(): Promise<ProjectSession>;
+  /** Read-only listing with no side effects (unlike initialize). */
+  list(): Promise<Project[]>;
   get(projectId: string): Promise<ProjectWorkspaceState | null>;
   create(name: string): Promise<StoredProject>;
   save(
@@ -322,6 +324,10 @@ class LocalStorageProjectRepository implements ProjectRepository {
       activeProjectId: activeProject.id,
       workspace,
     };
+  }
+
+  async list(): Promise<Project[]> {
+    return readIndex();
   }
 
   async get(projectId: string): Promise<ProjectWorkspaceState | null> {

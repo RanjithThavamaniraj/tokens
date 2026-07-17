@@ -52,6 +52,10 @@ import {
   type Project,
   type ProjectWorkspaceState,
 } from "@/lib/projects/ProjectRepository";
+import {
+  consumeSearchNavigation,
+  SEARCH_NAVIGATE_EVENT,
+} from "@/lib/search/SearchEngine";
 
 // Real, executable providers supported by the workspace runner. Behavior is
 // driven by Provider instances; this fixed order only controls presentation.
@@ -230,6 +234,15 @@ export default function WorkspacePage() {
     useState<RecommendationState | null>(null);
   const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
   const [recommendationCopied, setRecommendationCopied] = useState(false);
+
+  // Global Search navigation: transient scroll-and-highlight target consumed
+  // from the search modal. Presentation only — never touches execution,
+  // conversations, or persistence.
+  const [searchHighlightAnchor, setSearchHighlightAnchor] = useState<
+    string | null
+  >(null);
+  const searchHighlightTimeoutRef = useRef<number | null>(null);
+  const searchNavigationRef = useRef<() => void>(() => {});
 
   const buildProjectSnapshot = useCallback((): ProjectWorkspaceState => {
     const completedReviews = Object.fromEntries(
@@ -958,6 +971,51 @@ export default function WorkspacePage() {
     applyProjectSnapshot(workspace);
   }
 
+  // Consumes a pending Global Search selection: switches to the matched
+  // project if needed, then scrolls to and briefly highlights the matched
+  // section. Kept behind a ref so the mount-once event listener always calls
+  // the latest closure.
+  async function runSearchNavigation() {
+    const target = consumeSearchNavigation();
+    if (!target) return;
+
+    if (target.projectId !== activeProjectId) {
+      await handleSelectProject(target.projectId);
+    }
+    if (!target.anchor) return;
+
+    if (searchHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(searchHighlightTimeoutRef.current);
+    }
+    setSearchHighlightAnchor(target.anchor);
+    // Give React a beat to render the switched project before scrolling.
+    window.setTimeout(() => {
+      document
+        .getElementById(`search-anchor-${target.anchor}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    searchHighlightTimeoutRef.current = window.setTimeout(() => {
+      setSearchHighlightAnchor(null);
+      searchHighlightTimeoutRef.current = null;
+    }, 2400);
+  }
+
+  useEffect(() => {
+    searchNavigationRef.current = () => {
+      void runSearchNavigation();
+    };
+  });
+
+  useEffect(() => {
+    if (!projectsHydrated) return;
+    // Arriving from another page: the handoff is already in sessionStorage.
+    searchNavigationRef.current();
+    // Already mounted on /workspace: the modal notifies via this event.
+    const listener = () => searchNavigationRef.current();
+    window.addEventListener(SEARCH_NAVIGATE_EVENT, listener);
+    return () => window.removeEventListener(SEARCH_NAVIGATE_EVENT, listener);
+  }, [projectsHydrated]);
+
   async function handleRenameProject(projectId: string, name: string) {
     if (projectOperationsDisabled || !name.trim()) return;
     const updated = await projectRepository.rename(projectId, name);
@@ -1649,13 +1707,23 @@ export default function WorkspacePage() {
                 const stats = latestResponse
                   ? computeResponseStats(latestResponse)
                   : null;
+                const isSearchHighlighted =
+                  searchHighlightAnchor === `response-${id}`;
                 return (
                   <div
                     key={id}
+                    id={`search-anchor-response-${id}`}
                     className="rounded-lg"
                     style={{
                       background: "var(--color-glass)",
-                      border: "1px solid var(--color-border)",
+                      border: isSearchHighlighted
+                        ? "1px solid var(--color-accent)"
+                        : "1px solid var(--color-border)",
+                      boxShadow: isSearchHighlighted
+                        ? "0 0 0 3px rgba(238,123,48,0.3)"
+                        : "none",
+                      transition:
+                        "border-color 0.3s ease, box-shadow 0.3s ease",
                       padding: "16px 18px",
                     }}
                   >
@@ -2057,7 +2125,18 @@ export default function WorkspacePage() {
                 (r) => r?.status === "loading",
               );
               return (
-                <div style={{ marginTop: 16 }}>
+                <div
+                  id="search-anchor-debate"
+                  className="rounded-lg"
+                  style={{
+                    marginTop: 16,
+                    boxShadow:
+                      searchHighlightAnchor === "debate"
+                        ? "0 0 0 3px rgba(238,123,48,0.3)"
+                        : "none",
+                    transition: "box-shadow 0.3s ease",
+                  }}
+                >
                   {!debate && (
                     <div className="flex flex-col gap-2">
                       <button
@@ -2144,6 +2223,17 @@ export default function WorkspacePage() {
                 recommendation?.status !== "loading";
 
               return (
+                <div
+                  id="search-anchor-recommendation"
+                  className="rounded-lg"
+                  style={{
+                    boxShadow:
+                      searchHighlightAnchor === "recommendation"
+                        ? "0 0 0 3px rgba(238,123,48,0.3)"
+                        : "none",
+                    transition: "box-shadow 0.3s ease",
+                  }}
+                >
                 <RecommendationPanel
                   providerOptions={providers.map((entry) => ({
                     id: entry.id,
@@ -2172,6 +2262,7 @@ export default function WorkspacePage() {
                     handleCopyRecommendation(recommendation?.text ?? "")
                   }
                 />
+                </div>
               );
             })()}
           </motion.div>

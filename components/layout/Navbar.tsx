@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "@/components/ui/Logo";
+import GlobalSearch from "@/components/search/GlobalSearch";
 
 export default function Navbar() {
   return (
@@ -7,6 +8,7 @@ export default function Navbar() {
       <Link href="/" aria-label="Tokens home">
         <Logo />
       </Link>
+      <GlobalSearch />
     </header>
   );
 }
