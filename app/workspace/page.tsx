@@ -60,6 +60,7 @@ import ExportDialog from "@/components/export/ExportDialog";
 import type { ExportSource } from "@/lib/export/types";
 import { useSettings } from "@/lib/settings/SettingsContext";
 import { useRouter } from "next/navigation";
+import { onboardingService } from "@/lib/onboarding/OnboardingService";
 
 // Real, executable providers supported by the workspace runner. Behavior is
 // driven by Provider instances; this fixed order only controls presentation.
@@ -390,6 +391,15 @@ export default function WorkspacePage() {
       setProjects(session.projects);
       setActiveProjectId(session.activeProjectId);
       applyProjectSnapshot(session.workspace);
+
+      const handoff = onboardingService.consumePrompt();
+      if (handoff) {
+        if (handoff.systemPrompt !== undefined) {
+          setSystemPrompt(handoff.systemPrompt);
+        }
+        setUserPrompt(handoff.userPrompt);
+      }
+
       setProjectsHydrated(true);
     });
 

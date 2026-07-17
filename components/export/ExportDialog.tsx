@@ -7,6 +7,7 @@ import {
 } from "@/lib/export/ExportService";
 import type { ExportFormat, ExportScope, ExportSource } from "@/lib/export/types";
 import { useSettings } from "@/lib/settings/SettingsContext";
+import { analyticsService } from "@/lib/analytics/AnalyticsService";
 import ExportOptions from "./ExportOptions";
 
 export default function ExportDialog({
@@ -43,6 +44,7 @@ export default function ExportDialog({
         includeTimestamps: settings.includeTimestamps,
         includeProviderMetadata: settings.includeProviderMetadata,
       });
+      void analyticsService.recordExport(format, scope);
       onClose();
     } catch (error) {
       setStatus("error");

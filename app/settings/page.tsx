@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import SettingsSidebar from "@/components/settings/SettingsSidebar";
 import SettingsSection from "@/components/settings/SettingsSection";
@@ -22,6 +23,7 @@ import type {
   ThemePreference,
 } from "@/lib/settings/types";
 import { createProvider } from "@/lib/providers/ProviderFactory";
+import { onboardingService } from "@/lib/onboarding/OnboardingService";
 
 const WORKSPACE_PROVIDERS = [
   "openai",
@@ -42,6 +44,7 @@ function useIsMac(): boolean {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const {
     settings,
     setSetting,
@@ -145,6 +148,15 @@ export default function SettingsPage() {
                 <InfoRow label="Application version" value={APP_VERSION} />
                 <InfoRow label="About Tokens" value={APP_ABOUT} />
                 <DangerActions
+                  onRelaunchOnboarding={() =>
+                    void confirmAndRun(
+                      "Relaunch the first-run onboarding wizard?",
+                      async () => {
+                        await onboardingService.relaunch();
+                        router.push("/onboarding");
+                      },
+                    )
+                  }
                   onResetSettings={() =>
                     void confirmAndRun(
                       "Reset all settings to defaults? Search history will also be cleared.",
@@ -456,14 +468,32 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function DangerActions({
+  onRelaunchOnboarding,
   onResetSettings,
   onResetEverything,
 }: {
+  onRelaunchOnboarding: () => void;
   onResetSettings: () => void;
   onResetEverything: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row">
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      <button
+        type="button"
+        onClick={onRelaunchOnboarding}
+        className="rounded-full font-semibold"
+        style={{
+          background: "transparent",
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text)",
+          padding: "8px 16px",
+          fontFamily: "var(--font-body)",
+          fontSize: "0.85rem",
+          cursor: "pointer",
+        }}
+      >
+        Relaunch Onboarding
+      </button>
       <button
         type="button"
         onClick={onResetSettings}

@@ -11,6 +11,22 @@ export default function Navbar() {
       <div className="flex items-center gap-3">
         <GlobalSearch />
         <Link
+          href="/analytics"
+          aria-label="Usage & Insights"
+          className="rounded-full"
+          style={{
+            background: "var(--color-glass)",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-muted)",
+            padding: "6px 14px",
+            fontFamily: "var(--font-body)",
+            fontSize: "0.8rem",
+            textDecoration: "none",
+          }}
+        >
+          Insights
+        </Link>
+        <Link
           href="/settings"
           aria-label="Settings"
           className="rounded-full"
