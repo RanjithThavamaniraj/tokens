@@ -106,7 +106,7 @@ export default function HeroSection({
             marginBottom: 14,
           }}
         >
-          for developers with no self-control
+          for developers who can&apos;t stop prompting
         </motion.p>
 
         <motion.h1
@@ -120,27 +120,11 @@ export default function HeroSection({
             lineHeight: 1.1,
             color: "white",
             textShadow: "0 2px 40px rgba(0,0,0,0.6)",
-            marginBottom: 10,
+            marginBottom: 32,
           }}
         >
           One token can&apos;t hurt.
         </motion.h1>
-
-        <motion.p
-          className="text-[17px]"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 0.65, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.6 }}
-          style={{
-            fontStyle: "italic",
-            fontWeight: 400,
-            letterSpacing: "0.06em",
-            color: "white",
-            marginBottom: 32,
-          }}
-        >
-          ...said every AI developer ever.
-        </motion.p>
 
         <motion.button
           type="button"
@@ -168,31 +152,10 @@ export default function HeroSection({
             letterSpacing: "0.02em",
             border: "none",
             cursor: "pointer",
-            marginBottom: 12,
           }}
         >
           Start Monitoring
         </motion.button>
-
-        <motion.a
-          href="#providers"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 0.45, y: 0 }}
-          transition={{ delay: 0.65, duration: 0.6 }}
-          whileHover={{
-            opacity: 1,
-            textDecoration: "underline",
-            transition: { duration: 0.2 },
-          }}
-          style={{
-            color: "white",
-            fontSize: 12,
-            marginTop: 10,
-            textDecoration: "none",
-          }}
-        >
-          See how bad it really is
-        </motion.a>
       </div>
 
       <motion.div
