@@ -23,6 +23,17 @@ import {
   reviewFocusLabel,
   type ReviewFocus,
 } from "@/lib/workspace/review";
+import DebatePanel, {
+  type DebateRound1EntryView,
+  type DebateRound2EntryView,
+} from "@/components/workspace/DebatePanel";
+import {
+  buildDebateReviewMessages,
+  buildRebuttalMessages,
+  canStartDebate,
+  computeDebateRing,
+  type DebateParticipant,
+} from "@/lib/workspace/debate";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -54,6 +65,27 @@ type ReviewEntry = {
   status: "loading" | "done" | "error";
   text?: string;
   error?: string;
+};
+
+type DebateRoundEntryState = {
+  key: string;
+  status: "loading" | "done" | "error";
+  text?: string;
+  error?: string;
+};
+
+type DebateState = {
+  status: "round1" | "round2" | "complete";
+  round1: (DebateRoundEntryState & {
+    reviewerId: ProviderId;
+    revieweeId: ProviderId;
+    reviewerDisplayName: string;
+    revieweeDisplayName: string;
+  })[];
+  round2: (DebateRoundEntryState & {
+    providerId: ProviderId;
+    providerDisplayName: string;
+  })[];
 };
 
 // The newest assistant turn drives Copy Response and the comparison stats,
@@ -115,6 +147,15 @@ export default function WorkspacePage() {
     Set<ProviderId>
   >(new Set());
   const [reviewCopiedId, setReviewCopiedId] = useState<ProviderId | null>(null);
+
+  // Debate orchestration is entirely separate from `conversations` — it never
+  // calls setConversations, and clearing/discarding a debate never touches any
+  // provider's conversation history.
+  const [debate, setDebate] = useState<DebateState | null>(null);
+  const [debateCollapsedKeys, setDebateCollapsedKeys] = useState<Set<string>>(
+    new Set(),
+  );
+  const [debateCopiedKey, setDebateCopiedKey] = useState<string | null>(null);
 
   // Auto-scroll: only follow new messages when the user is already near the
   // page bottom. Tracked continuously so a user who scrolled up to read
@@ -255,6 +296,191 @@ export default function WorkspacePage() {
         ],
       }));
     }
+  }
+
+  function toggleDebateCollapsed(key: string) {
+    setDebateCollapsedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  async function handleCopyDebateEntry(key: string, text: string) {
+    await navigator.clipboard.writeText(text);
+    setDebateCopiedKey(key);
+    setTimeout(
+      () => setDebateCopiedKey((current) => (current === key ? null : current)),
+      2000,
+    );
+  }
+
+  // Minimal duplicate of executeTurn's connect/credentials/executePrompt/error
+  // boilerplate — intentionally NOT extracted into a shared helper, so
+  // executeTurn and runReview remain completely untouched.
+  async function callProviderOnce(
+    providerId: ProviderId,
+    messages: Message[],
+  ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+    try {
+      const connected = await connectionManager.isConnected(providerId);
+      if (!connected) {
+        return {
+          ok: false,
+          error: "Not connected. Connect this provider first.",
+        };
+      }
+      const credentials = await connectionManager.get(providerId);
+      const provider = createProvider(providerId);
+      const result = await provider!.executePrompt({
+        messages,
+        credentials: credentials ?? undefined,
+      });
+      return { ok: true, text: result.text };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Something went wrong.";
+      if (error instanceof Error && error.name === "AuthenticationError") {
+        await connectionManager.clear(providerId);
+      }
+      return { ok: false, error: message };
+    }
+  }
+
+  function getDebateParticipants(): DebateParticipant[] {
+    return visibleResults
+      .map((id): DebateParticipant | null => {
+        const conversation = conversations[id] ?? [];
+        const lastMsg = conversation[conversation.length - 1];
+        if (lastMsg?.role !== "assistant") return null;
+        const prevMsg = conversation[conversation.length - 2];
+        const originalUserPrompt =
+          prevMsg?.role === "user" ? prevMsg.content : "";
+        const provider = providers.find((entry) => entry.id === id)!.provider;
+        return {
+          id,
+          displayName: provider.displayName,
+          originalUserPrompt,
+          originalResponseText: lastMsg.content,
+        };
+      })
+      .filter((p): p is DebateParticipant => p !== null);
+  }
+
+  async function runDebate() {
+    const participants = getDebateParticipants();
+    const validation = canStartDebate(participants);
+    if (!validation.ok) return;
+
+    const ring = computeDebateRing(participants);
+    const displayNameById = new Map(
+      participants.map((p) => [p.id, p.displayName]),
+    );
+
+    setDebate({
+      status: "round1",
+      round1: ring.map((pairing) => ({
+        key: `${pairing.reviewer.id}->${pairing.reviewee.id}`,
+        reviewerId: pairing.reviewer.id as ProviderId,
+        revieweeId: pairing.reviewee.id as ProviderId,
+        reviewerDisplayName: pairing.reviewer.displayName,
+        revieweeDisplayName: pairing.reviewee.displayName,
+        status: "loading",
+      })),
+      round2: [],
+    });
+
+    // Round 1: run all critiques concurrently; wait for ALL to settle before
+    // Round 2 begins (a round-level barrier — this is the "sequential"
+    // requirement: round 2 cannot start until every round 1 call is done).
+    const round1Results = await Promise.all(
+      ring.map((pairing) =>
+        callProviderOnce(
+          pairing.reviewer.id as ProviderId,
+          buildDebateReviewMessages(pairing),
+        ),
+      ),
+    );
+
+    setDebate((prev) =>
+      prev
+        ? {
+            ...prev,
+            round1: prev.round1.map((entry, i) => {
+              const r = round1Results[i];
+              return r.ok
+                ? { ...entry, status: "done" as const, text: r.text }
+                : { ...entry, status: "error" as const, error: r.error };
+            }),
+          }
+        : prev,
+    );
+
+    // Round 2: each original participant responds to the critique it
+    // received. If that critique failed, skip this participant's round 2
+    // call rather than inventing a critique to respond to.
+    const round2Targets = participants.map((participant) => {
+      const critiqueIndex = ring.findIndex(
+        (pairing) => pairing.reviewee.id === participant.id,
+      );
+      const critique = round1Results[critiqueIndex];
+      return {
+        participant,
+        critique: critique && critique.ok ? critique.text : null,
+      };
+    });
+
+    setDebate((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: "round2",
+            round2: round2Targets.map(({ participant, critique }) => ({
+              key: participant.id,
+              providerId: participant.id as ProviderId,
+              providerDisplayName:
+                displayNameById.get(participant.id) ?? participant.id,
+              status: critique === null ? "error" : "loading",
+              error:
+                critique === null ? "No critique received — skipping." : undefined,
+            })),
+          }
+        : prev,
+    );
+
+    const pending = round2Targets.filter((t) => t.critique !== null);
+    const round2Results = await Promise.all(
+      pending.map((t) =>
+        callProviderOnce(
+          t.participant.id as ProviderId,
+          buildRebuttalMessages(
+            t.participant.originalResponseText,
+            t.critique as string,
+          ),
+        ),
+      ),
+    );
+
+    setDebate((prev) => {
+      if (!prev) return prev;
+      let resultIndex = 0;
+      return {
+        ...prev,
+        status: "complete",
+        round2: prev.round2.map((entry) => {
+          if (entry.error === "No critique received — skipping.")
+            return entry;
+          const r = round2Results[resultIndex++];
+          return r.ok
+            ? { ...entry, status: "done" as const, text: r.text }
+            : { ...entry, status: "error" as const, error: r.error };
+        }),
+      };
+    });
   }
 
   function startNewConversation(id: ProviderId) {
@@ -1116,6 +1342,85 @@ export default function WorkspacePage() {
                 );
               })}
             </div>
+            {(() => {
+              const participants = getDebateParticipants();
+              const validation = canStartDebate(participants);
+              const anyReviewOrResultLoading = Object.values(results).some(
+                (r) => r?.status === "loading",
+              );
+              return (
+                <div style={{ marginTop: 16 }}>
+                  {!debate && (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void runDebate();
+                        }}
+                        disabled={!validation.ok || anyReviewOrResultLoading}
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.85rem",
+                          color: "var(--color-text)",
+                          background: "var(--color-glass)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: 999,
+                          padding: "8px 16px",
+                          cursor:
+                            validation.ok && !anyReviewOrResultLoading
+                              ? "pointer"
+                              : "not-allowed",
+                          opacity:
+                            validation.ok && !anyReviewOrResultLoading ? 1 : 0.6,
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        Start Debate
+                      </button>
+                      {!validation.ok && (
+                        <p
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-muted)",
+                          }}
+                        >
+                          {validation.reason}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {debate && (
+                    <DebatePanel
+                      overallStatus={debate.status}
+                      round1={debate.round1.map(
+                        (e): DebateRound1EntryView => ({
+                          key: e.key,
+                          reviewerDisplayName: e.reviewerDisplayName,
+                          revieweeDisplayName: e.revieweeDisplayName,
+                          status: e.status,
+                          text: e.text,
+                          error: e.error,
+                        }),
+                      )}
+                      round2={debate.round2.map(
+                        (e): DebateRound2EntryView => ({
+                          key: e.key,
+                          providerDisplayName: e.providerDisplayName,
+                          status: e.status,
+                          text: e.text,
+                          error: e.error,
+                        }),
+                      )}
+                      collapsedKeys={debateCollapsedKeys}
+                      onToggleCollapse={toggleDebateCollapsed}
+                      copiedKey={debateCopiedKey}
+                      onCopy={handleCopyDebateEntry}
+                    />
+                  )}
+                </div>
+              );
+            })()}
           </motion.div>
         )}
       </div>
