@@ -46,10 +46,10 @@ const PROVIDERS: {
     slug: "github-copilot",
   },
   {
-    name: "Cursor",
-    status: "Coming Soon",
-    coin: "/coins/cursor.png",
-    slug: "cursor",
+    name: "Perplexity",
+    status: "Available",
+    coin: "/coins/perplexity.png",
+    slug: "perplexity",
   },
 ];
 
