@@ -56,6 +56,8 @@ import {
   consumeSearchNavigation,
   SEARCH_NAVIGATE_EVENT,
 } from "@/lib/search/SearchEngine";
+import ExportDialog from "@/components/export/ExportDialog";
+import type { ExportSource } from "@/lib/export/types";
 
 // Real, executable providers supported by the workspace runner. Behavior is
 // driven by Provider instances; this fixed order only controls presentation.
@@ -243,6 +245,7 @@ export default function WorkspacePage() {
   >(null);
   const searchHighlightTimeoutRef = useRef<number | null>(null);
   const searchNavigationRef = useRef<() => void>(() => {});
+  const [exportOpen, setExportOpen] = useState(false);
 
   const buildProjectSnapshot = useCallback((): ProjectWorkspaceState => {
     const completedReviews = Object.fromEntries(
@@ -1308,6 +1311,17 @@ export default function WorkspacePage() {
     ? WORKSPACE_PROVIDER_IDS.filter((id) => selectedIds.has(id))
     : [];
 
+  const exportSource: ExportSource | null = (() => {
+    const project = projects.find((entry) => entry.id === activeProjectId);
+    if (!project) return null;
+    return {
+      project,
+      workspace: buildProjectSnapshot(),
+      providerName: (id) =>
+        providers.find((entry) => entry.id === id)?.provider.displayName ?? id,
+    };
+  })();
+
   if (!projectsHydrated) {
     return (
       <main
@@ -1599,22 +1613,46 @@ export default function WorkspacePage() {
             />
           </label>
 
-          <button
-            type="button"
-            onClick={handleRun}
-            disabled={!canRun}
-            className="mt-8 w-full rounded-full font-semibold"
-            style={{
-              background: "#EE7B30",
-              color: "#06070B",
-              padding: "10px 20px",
-              fontFamily: "var(--font-body)",
-              fontSize: "0.9rem",
-              opacity: canRun ? 1 : 0.7,
-            }}
-          >
-            {isRunning ? "Running..." : "Run Prompt"}
-          </button>
+          <div className="mt-8 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRun}
+              disabled={!canRun}
+              className="flex-1 rounded-full font-semibold"
+              style={{
+                background: "#EE7B30",
+                color: "#06070B",
+                padding: "10px 20px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.9rem",
+                opacity: canRun ? 1 : 0.7,
+              }}
+            >
+              {isRunning ? "Running..." : "Run Prompt"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              disabled={!projectsHydrated || !activeProjectId}
+              className="rounded-full font-semibold"
+              style={{
+                background: "transparent",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text)",
+                padding: "10px 20px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.9rem",
+                cursor:
+                  !projectsHydrated || !activeProjectId
+                    ? "not-allowed"
+                    : "pointer",
+                opacity: !projectsHydrated || !activeProjectId ? 0.6 : 1,
+                flexShrink: 0,
+              }}
+            >
+              Export
+            </button>
+          </div>
         </motion.div>
 
         {visibleResults.length > 0 && (
@@ -2270,6 +2308,13 @@ export default function WorkspacePage() {
           </div>
         </div>
       </div>
+
+      {exportOpen && exportSource && (
+        <ExportDialog
+          source={exportSource}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </main>
   );
 }
