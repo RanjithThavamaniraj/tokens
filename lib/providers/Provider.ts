@@ -11,6 +11,7 @@ export type ProviderId =
   | "claude"
   | "gemini"
   | "grok"
+  | "perplexity"
   | "openrouter"
   | "cursor"
   | "github-copilot";

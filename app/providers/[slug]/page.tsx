@@ -7,7 +7,6 @@ const KNOWN_SLUGS = [
   "claude",
   "gemini",
   "github-copilot",
-  "perplexity",
 ] as const;
 
 export function generateStaticParams() {

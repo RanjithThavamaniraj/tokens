@@ -60,6 +60,7 @@ const WORKSPACE_PROVIDER_IDS: ProviderId[] = [
   "claude",
   "gemini",
   "grok",
+  "perplexity",
 ];
 
 const fadeUp: Variants = {

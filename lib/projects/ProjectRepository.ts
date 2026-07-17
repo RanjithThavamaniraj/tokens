@@ -92,12 +92,13 @@ export interface ProjectRepository {
 
 export function emptyProjectWorkspace(): ProjectWorkspaceState {
   return {
-    selectedProviderIds: ["openai", "claude", "gemini", "grok"],
+    selectedProviderIds: ["openai", "claude", "gemini", "grok", "perplexity"],
     selectedModelIds: {
       openai: "gpt-4o-mini",
       claude: "claude-haiku-4-5",
       gemini: "gemini-2.0-flash",
       grok: "grok-4.5",
+      perplexity: "perplexity/sonar",
     },
     responseUsage: {},
     stoppedProviderIds: [],
@@ -136,7 +137,8 @@ function isProviderId(value: unknown): value is ProviderId {
     value === "openai" ||
     value === "claude" ||
     value === "gemini" ||
-    value === "grok"
+    value === "grok" ||
+    value === "perplexity"
   );
 }
 

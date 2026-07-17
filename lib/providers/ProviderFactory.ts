@@ -3,6 +3,7 @@ import { OpenAIProvider } from "@/lib/providers/OpenAIProvider";
 import { ClaudeProvider } from "@/lib/providers/ClaudeProvider";
 import { GeminiProvider } from "@/lib/providers/GeminiProvider";
 import { GrokProvider } from "@/lib/providers/GrokProvider";
+import { PerplexityProvider } from "@/lib/providers/PerplexityProvider";
 import { OpenRouterProvider } from "@/lib/providers/OpenRouterProvider";
 import { CursorProvider } from "@/lib/providers/CursorProvider";
 import { GitHubCopilotProvider } from "@/lib/providers/GitHubCopilotProvider";
@@ -16,6 +17,7 @@ const REGISTRY: Record<ProviderId, new () => Provider> = {
   claude: ClaudeProvider,
   gemini: GeminiProvider,
   grok: GrokProvider,
+  perplexity: PerplexityProvider,
   openrouter: OpenRouterProvider,
   cursor: CursorProvider,
   "github-copilot": GitHubCopilotProvider,
