@@ -22,22 +22,22 @@ const PROVIDERS: {
 }[] = [
   { name: "OpenAI", status: "Connected", coin: "/coins/openai.png", slug: "openai" },
   {
-    name: "Anthropic Claude",
+    name: "Claude",
     status: "Connected",
     coin: "/coins/claude.png",
     slug: "claude",
   },
   {
-    name: "Google Gemini",
+    name: "Gemini",
     status: "Available",
     coin: "/coins/gemini.png",
     slug: "gemini",
   },
   {
-    name: "OpenRouter",
+    name: "Grok",
     status: "Available",
-    coin: "/coins/openrouter.png",
-    slug: "openrouter",
+    coin: "/coins/grok.png",
+    slug: "grok",
   },
   {
     name: "GitHub Copilot",

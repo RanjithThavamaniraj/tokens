@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
-import { createProvider } from "@/lib/providers/ProviderFactory";
 
+// UI-only slug list for this "Coming Soon" page. "grok" is intentionally
+// listed here without a Provider implementation — its card exists on the
+// homepage but no integration is built yet, exactly like other
+// coming-soon providers.
 const KNOWN_SLUGS = [
   "claude",
   "gemini",
-  "openrouter",
+  "grok",
   "github-copilot",
   "cursor",
 ] as const;
@@ -22,8 +25,7 @@ export default async function ProviderComingSoonPage({
 }) {
   const { slug } = await params;
 
-  const provider = createProvider(slug);
-  if (!provider) {
+  if (!(KNOWN_SLUGS as readonly string[]).includes(slug)) {
     notFound();
   }
 
