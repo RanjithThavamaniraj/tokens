@@ -16,6 +16,13 @@ import {
 } from "@/lib/workspace/responseStats";
 import { computeConsensusV2, type ConsensusResponse } from "@/lib/workspace/consensus";
 import type { LibraryPrompt } from "@/lib/prompts/PromptLibrary";
+import ReviewDialog from "@/components/workspace/ReviewDialog";
+import ReviewResult from "@/components/workspace/ReviewResult";
+import {
+  buildReviewMessages,
+  reviewFocusLabel,
+  type ReviewFocus,
+} from "@/lib/workspace/review";
 
 // This milestone's explicit scope: only OpenAI and Claude need to be
 // supported by the workspace runner. This is NOT a general-purpose provider
@@ -39,6 +46,14 @@ type ExecutionState = {
   // The user message currently in flight. Rendered as a pending bubble in
   // the thread while loading; only committed to the conversation on success.
   pendingUser?: string;
+};
+
+type ReviewEntry = {
+  reviewerId: ProviderId;
+  focus: ReviewFocus;
+  status: "loading" | "done" | "error";
+  text?: string;
+  error?: string;
 };
 
 // The newest assistant turn drives Copy Response and the comparison stats,
@@ -86,6 +101,21 @@ export default function WorkspacePage() {
     text: string;
   } | null>(null);
 
+  // Reviews are fully independent of `conversations` — never appended as a
+  // conversation turn, never sent as history on a future turn. Modeled as an
+  // array per provider (even though only the latest is shown) so a future
+  // multi-round Debate mode can append entries without a data-shape change.
+  const [reviews, setReviews] = useState<
+    Partial<Record<ProviderId, ReviewEntry[]>>
+  >({});
+  const [reviewDialogFor, setReviewDialogFor] = useState<ProviderId | null>(
+    null,
+  );
+  const [reviewCollapsedIds, setReviewCollapsedIds] = useState<
+    Set<ProviderId>
+  >(new Set());
+  const [reviewCopiedId, setReviewCopiedId] = useState<ProviderId | null>(null);
+
   // Auto-scroll: only follow new messages when the user is already near the
   // page bottom. Tracked continuously so a user who scrolled up to read
   // older turns is never force-scrolled.
@@ -129,6 +159,104 @@ export default function WorkspacePage() {
     });
   }
 
+  function toggleReviewCollapsed(id: ProviderId) {
+    setReviewCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleCopyReview(id: ProviderId, text: string) {
+    await navigator.clipboard.writeText(text);
+    setReviewCopiedId(id);
+    setTimeout(
+      () => setReviewCopiedId((current) => (current === id ? null : current)),
+      2000,
+    );
+  }
+
+  // Runs a single, stateless review pass: `reviewerId` reviews `revieweeId`'s
+  // latest response. This calls the SAME executePrompt() capability every
+  // other feature uses, with a one-off message array (no conversation
+  // history in, no conversation history out) — it never touches
+  // `conversations`, so the reviewed response and its thread are unaffected.
+  async function runReview(
+    revieweeId: ProviderId,
+    reviewerId: ProviderId,
+    focus: ReviewFocus,
+  ) {
+    if (reviewerId === revieweeId) return; // defensive; UI already excludes this
+
+    const conversation = conversations[revieweeId] ?? [];
+    const assistantIndex = conversation.length - 1;
+    const last = conversation[assistantIndex];
+    if (last?.role !== "assistant") return;
+    const previous = conversation[assistantIndex - 1];
+    const originalUserPrompt =
+      previous?.role === "user" ? previous.content : "";
+    const originalResponseText = last.content;
+
+    setReviewDialogFor(null);
+    setReviews((prev) => ({
+      ...prev,
+      [revieweeId]: [
+        ...(prev[revieweeId] ?? []),
+        { reviewerId, focus, status: "loading" },
+      ],
+    }));
+
+    try {
+      const connected = await connectionManager.isConnected(reviewerId);
+      if (!connected) {
+        setReviews((prev) => ({
+          ...prev,
+          [revieweeId]: [
+            ...(prev[revieweeId] ?? []).slice(0, -1),
+            {
+              reviewerId,
+              focus,
+              status: "error",
+              error: "Not connected. Connect this provider first.",
+            },
+          ],
+        }));
+        return;
+      }
+      const credentials = await connectionManager.get(reviewerId);
+      const reviewer = createProvider(reviewerId);
+      const result = await reviewer!.executePrompt({
+        messages: buildReviewMessages(
+          originalUserPrompt,
+          originalResponseText,
+          focus,
+        ),
+        credentials: credentials ?? undefined,
+      });
+      setReviews((prev) => ({
+        ...prev,
+        [revieweeId]: [
+          ...(prev[revieweeId] ?? []).slice(0, -1),
+          { reviewerId, focus, status: "done", text: result.text },
+        ],
+      }));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Something went wrong.";
+      if (error instanceof Error && error.name === "AuthenticationError") {
+        await connectionManager.clear(reviewerId);
+      }
+      setReviews((prev) => ({
+        ...prev,
+        [revieweeId]: [
+          ...(prev[revieweeId] ?? []).slice(0, -1),
+          { reviewerId, focus, status: "error", error: message },
+        ],
+      }));
+    }
+  }
+
   function startNewConversation(id: ProviderId) {
     // Clears only this provider's thread — no other provider's state,
     // connection, or credentials are touched.
@@ -138,6 +266,11 @@ export default function WorkspacePage() {
       return next;
     });
     setResults((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setReviews((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
@@ -251,6 +384,11 @@ export default function WorkspacePage() {
 
     const base = conversation.slice(0, -2);
     setConversations((prev) => ({ ...prev, [id]: base }));
+    setReviews((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     await executeTurn(id, base, previous.content);
   }
 
@@ -267,6 +405,11 @@ export default function WorkspacePage() {
     setEditing(null);
     const base = conversation.slice(0, -2);
     setConversations((prev) => ({ ...prev, [id]: base }));
+    setReviews((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     await executeTurn(id, base, newContent);
   }
 
@@ -692,9 +835,44 @@ export default function WorkspacePage() {
                           >
                             {collapsedIds.has(id) ? "Expand" : "Collapse"}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReviewDialogFor(
+                                reviewDialogFor === id ? null : id,
+                              )
+                            }
+                            style={{
+                              fontFamily: "var(--font-body)",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text)",
+                              background: "var(--color-glass)",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 999,
+                              padding: "4px 10px",
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          >
+                            Review
+                          </button>
                         </div>
                       )}
                     </div>
+                    {reviewDialogFor === id && (
+                      <ReviewDialog
+                        reviewerOptions={providers
+                          .filter((entry) => entry.id !== id)
+                          .map((entry) => ({
+                            id: entry.id,
+                            displayName: entry.provider.displayName,
+                          }))}
+                        onSubmit={(reviewerId, focus) =>
+                          runReview(id, reviewerId, focus)
+                        }
+                        onCancel={() => setReviewDialogFor(null)}
+                      />
+                    )}
                     {stats && (
                       <p
                         style={{
@@ -909,6 +1087,30 @@ export default function WorkspacePage() {
                           {result.error}
                         </p>
                       )}
+                      {(() => {
+                        const providerReviews = reviews[id] ?? [];
+                        const latestReview =
+                          providerReviews[providerReviews.length - 1] ?? null;
+                        return latestReview ? (
+                          <ReviewResult
+                            reviewerDisplayName={
+                              providers.find(
+                                (entry) => entry.id === latestReview.reviewerId,
+                              )!.provider.displayName
+                            }
+                            focusLabel={reviewFocusLabel(latestReview.focus)}
+                            status={latestReview.status}
+                            text={latestReview.text}
+                            error={latestReview.error}
+                            collapsed={reviewCollapsedIds.has(id)}
+                            onToggleCollapse={() => toggleReviewCollapsed(id)}
+                            onCopy={() =>
+                              handleCopyReview(id, latestReview.text ?? "")
+                            }
+                            copied={reviewCopiedId === id}
+                          />
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 );
