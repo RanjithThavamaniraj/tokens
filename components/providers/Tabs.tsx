@@ -11,7 +11,7 @@ export default function Tabs({
 }) {
   return (
     <div
-      className="flex items-center gap-2 overflow-x-auto"
+      className="flex items-center gap-1.5 overflow-x-auto"
       style={{
         scrollbarWidth: "none",
         borderBottom: "1px solid var(--color-border)",
@@ -24,7 +24,9 @@ export default function Tabs({
             key={tab}
             type="button"
             onClick={() => onChange(tab)}
-            className="whitespace-nowrap transition-colors duration-300 ease-out"
+            // shrink-0 guarantees a tab can never be squeezed below its
+            // label's width — overflowing tabs scroll instead of clipping.
+            className="shrink-0 whitespace-nowrap transition-colors duration-300 ease-out"
             style={{
               fontFamily: "var(--font-body)",
               fontSize: "0.9rem",
@@ -35,7 +37,7 @@ export default function Tabs({
                 ? "1px solid var(--color-border)"
                 : "1px solid transparent",
               borderRadius: 9999,
-              padding: "8px 18px",
+              padding: "8px 12px",
               marginBottom: 8,
             }}
           >
