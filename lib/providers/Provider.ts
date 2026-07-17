@@ -10,6 +10,7 @@ export type ProviderId =
   | "openai"
   | "claude"
   | "gemini"
+  | "grok"
   | "openrouter"
   | "cursor"
   | "github-copilot";
@@ -67,10 +68,20 @@ export interface Message {
 export interface ProviderExecutionRequest {
   messages: Message[];
   credentials?: Record<string, string>;
+  modelId?: string;
+  signal?: AbortSignal;
+  onChunk?: (chunk: string) => void;
+}
+
+export interface ProviderTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
 }
 
 export interface ProviderExecutionResult {
   text: string;
+  usage?: ProviderTokenUsage;
 }
 
 export interface ProviderOverview {
@@ -173,6 +184,7 @@ export interface Provider {
   readonly logo: string;
   readonly capabilities: ProviderCapabilities;
   readonly integration: ProviderIntegration;
+  readonly defaultModelId?: string;
 
   connect(credentials?: Record<string, string>): Promise<void>;
   disconnect(): Promise<void>;
@@ -223,8 +235,10 @@ export abstract class BaseProvider implements Provider {
   abstract readonly logo: string;
   abstract readonly capabilities: ProviderCapabilities;
   abstract readonly integration: ProviderIntegration;
+  readonly defaultModelId?: string;
 
   async connect(_credentials?: Record<string, string>): Promise<void> {
+    void _credentials;
     // Placeholder. Real auth/connection logic will live here per-provider.
     throw new Error("This integration has not been implemented yet.");
   }
@@ -234,6 +248,7 @@ export abstract class BaseProvider implements Provider {
   }
 
   async getModels(_credentials?: Record<string, string>): Promise<ProviderModel[]> {
+    void _credentials;
     return [];
   }
 
@@ -250,6 +265,7 @@ export abstract class BaseProvider implements Provider {
   }
 
   async executePrompt(_request: ProviderExecutionRequest): Promise<ProviderExecutionResult> {
+    void _request;
     return { text: "Execution not implemented." };
   }
 

@@ -1,5 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Message } from "@/lib/providers/Provider";
+import type {
+  Message,
+  ProviderExecutionResult,
+} from "@/lib/providers/Provider";
 import type { AnthropicModelSummary } from "./types";
 import { normalizeAnthropicError } from "./errors";
 
@@ -39,7 +42,12 @@ export async function listModels(apiKey: string): Promise<AnthropicModelSummary[
 export async function generateCompletion(
   apiKey: string,
   messages: Message[],
-): Promise<string> {
+  options?: {
+    modelId?: string;
+    signal?: AbortSignal;
+    onChunk?: (chunk: string) => void;
+  },
+): Promise<ProviderExecutionResult> {
   try {
     const system = messages
       .filter((message) => message.role === "system")
@@ -53,17 +61,40 @@ export async function generateCompletion(
       .map((message) => ({ role: message.role, content: message.content }));
 
     const client = createSdkClient(apiKey);
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
-      ...(system ? { system } : {}),
-      messages: turns,
-    });
-    const textBlock = response.content.find(
-      (block): block is Extract<typeof block, { type: "text" }> => block.type === "text",
-    );
-    return textBlock?.text ?? "";
+    let text = "";
+    const stream = client.messages
+      .stream(
+        {
+          model: options?.modelId ?? "claude-haiku-4-5",
+          max_tokens: 1024,
+          ...(system ? { system } : {}),
+          messages: turns,
+        },
+        { signal: options?.signal },
+      )
+      .on("text", (chunk) => {
+        text += chunk;
+        options?.onChunk?.(chunk);
+      });
+    const response = await stream.finalMessage();
+    const inputTokens = response.usage.input_tokens;
+    const outputTokens = response.usage.output_tokens;
+
+    return {
+      text,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      },
+    };
   } catch (error) {
+    if (
+      options?.signal?.aborted ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      throw error;
+    }
     throw normalizeAnthropicError(error);
   }
 }

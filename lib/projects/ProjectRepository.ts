@@ -1,4 +1,8 @@
-import type { Message, ProviderId } from "@/lib/providers/Provider";
+import type {
+  Message,
+  ProviderId,
+  ProviderTokenUsage,
+} from "@/lib/providers/Provider";
 import type { RecommendationState } from "@/lib/workspace/recommendation";
 import type { ReviewFocus } from "@/lib/workspace/review";
 
@@ -49,6 +53,9 @@ export interface ProjectDebateState {
 
 export interface ProjectWorkspaceState {
   selectedProviderIds: ProviderId[];
+  selectedModelIds: Partial<Record<ProviderId, string>>;
+  responseUsage: Partial<Record<ProviderId, ProviderTokenUsage>>;
+  stoppedProviderIds: ProviderId[];
   systemPrompt: string;
   userPrompt: string;
   conversations: Partial<Record<ProviderId, Message[]>>;
@@ -85,7 +92,15 @@ export interface ProjectRepository {
 
 export function emptyProjectWorkspace(): ProjectWorkspaceState {
   return {
-    selectedProviderIds: ["openai", "claude", "gemini"],
+    selectedProviderIds: ["openai", "claude", "gemini", "grok"],
+    selectedModelIds: {
+      openai: "gpt-4o-mini",
+      claude: "claude-haiku-4-5",
+      gemini: "gemini-2.0-flash",
+      grok: "grok-4.5",
+    },
+    responseUsage: {},
+    stoppedProviderIds: [],
     systemPrompt: "",
     userPrompt: "",
     conversations: {},
@@ -117,7 +132,12 @@ function isProject(value: unknown): value is Project {
 }
 
 function isProviderId(value: unknown): value is ProviderId {
-  return value === "openai" || value === "claude" || value === "gemini";
+  return (
+    value === "openai" ||
+    value === "claude" ||
+    value === "gemini" ||
+    value === "grok"
+  );
 }
 
 function isMessage(value: unknown): value is Message {
@@ -131,7 +151,7 @@ function isMessage(value: unknown): value is Message {
   );
 }
 
-function isProjectWorkspace(value: unknown): value is ProjectWorkspaceState {
+function isProjectWorkspace(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const workspace = value as Partial<ProjectWorkspaceState>;
   const conversationsValid =
@@ -158,6 +178,24 @@ function isProjectWorkspace(value: unknown): value is ProjectWorkspaceState {
       workspace.recommendation.status === "done" &&
       typeof workspace.recommendation.providerId === "string" &&
       typeof workspace.recommendation.text === "string");
+  const selectedModelsValid =
+    workspace.selectedModelIds === undefined ||
+    (workspace.selectedModelIds !== null &&
+      typeof workspace.selectedModelIds === "object" &&
+      !Array.isArray(workspace.selectedModelIds) &&
+      Object.entries(workspace.selectedModelIds).every(
+        ([providerId, modelId]) =>
+          isProviderId(providerId) && typeof modelId === "string",
+      ));
+  const responseUsageValid =
+    workspace.responseUsage === undefined ||
+    (workspace.responseUsage !== null &&
+      typeof workspace.responseUsage === "object" &&
+      !Array.isArray(workspace.responseUsage));
+  const stoppedProvidersValid =
+    workspace.stoppedProviderIds === undefined ||
+    (Array.isArray(workspace.stoppedProviderIds) &&
+      workspace.stoppedProviderIds.every(isProviderId));
 
   return (
     Array.isArray(workspace.selectedProviderIds) &&
@@ -167,6 +205,9 @@ function isProjectWorkspace(value: unknown): value is ProjectWorkspaceState {
     conversationsValid &&
     reviewsValid &&
     debateValid &&
+    selectedModelsValid &&
+    responseUsageValid &&
+    stoppedProvidersValid &&
     isProviderId(workspace.recommendationProviderId) &&
     recommendationValid
   );
@@ -189,7 +230,17 @@ function readProject(projectId: string): StoredProject | null {
     ) {
       return null;
     }
-    return stored as StoredProject;
+    const workspace = stored.workspace as ProjectWorkspaceState;
+    return {
+      version: STORAGE_VERSION,
+      project: stored.project,
+      workspace: {
+        ...workspace,
+        selectedModelIds: workspace.selectedModelIds ?? {},
+        responseUsage: workspace.responseUsage ?? {},
+        stoppedProviderIds: workspace.stoppedProviderIds ?? [],
+      },
+    };
   } catch {
     return null;
   }

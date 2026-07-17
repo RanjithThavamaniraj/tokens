@@ -21,6 +21,7 @@ export class OpenAIProvider extends BaseProvider {
     "Connect your OpenAI account to track models, usage, and billing.";
   readonly documentationUrl = "https://platform.openai.com/docs";
   readonly logo = "/coins/openai.png";
+  readonly defaultModelId = "gpt-4o-mini";
   readonly capabilities: ProviderCapabilities = {
     models: true,
     usage: true,
@@ -83,7 +84,10 @@ export class OpenAIProvider extends BaseProvider {
     if (!apiKey) {
       throw new OpenAIClientError("An API key is required.", "invalid_api_key");
     }
-    const text = await generateCompletion(apiKey, request.messages);
-    return { text };
+    return generateCompletion(apiKey, request.messages, {
+      modelId: request.modelId,
+      signal: request.signal,
+      onChunk: request.onChunk,
+    });
   }
 }

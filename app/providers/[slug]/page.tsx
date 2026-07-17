@@ -2,14 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 
-// UI-only slug list for this "Coming Soon" page. "grok" is intentionally
-// listed here without a Provider implementation — its card exists on the
-// homepage but no integration is built yet, exactly like other
-// coming-soon providers.
+// UI-only slug list for provider integrations that are not implemented yet.
 const KNOWN_SLUGS = [
   "claude",
   "gemini",
-  "grok",
   "github-copilot",
   "cursor",
 ] as const;

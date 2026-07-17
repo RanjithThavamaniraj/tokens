@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
-import type { Message, ProviderId } from "@/lib/providers/Provider";
+import type {
+  Message,
+  ProviderId,
+  ProviderModel,
+  ProviderTokenUsage,
+} from "@/lib/providers/Provider";
 import { connectionManager } from "@/lib/connections/ConnectionManager";
 import MarkdownResponse from "@/components/workspace/MarkdownResponse";
 import PromptLibraryPanel from "@/components/workspace/PromptLibraryPanel";
@@ -48,12 +53,14 @@ import {
   type ProjectWorkspaceState,
 } from "@/lib/projects/ProjectRepository";
 
-// This milestone's explicit scope: only OpenAI and Claude need to be
-// supported by the workspace runner. This is NOT a general-purpose provider
-// list — everywhere else on this page, behavior is driven by the `Provider`
-// instances themselves (displayName, executePrompt, ...), never by branching
-// on these id strings.
-const WORKSPACE_PROVIDER_IDS: ProviderId[] = ["openai", "claude", "gemini"];
+// Real, executable providers supported by the workspace runner. Behavior is
+// driven by Provider instances; this fixed order only controls presentation.
+const WORKSPACE_PROVIDER_IDS: ProviderId[] = [
+  "openai",
+  "claude",
+  "gemini",
+  "grok",
+];
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 28 },
@@ -70,6 +77,9 @@ type ExecutionState = {
   // The user message currently in flight. Rendered as a pending bubble in
   // the thread while loading; only committed to the conversation on success.
   pendingUser?: string;
+  streamedText?: string;
+  usage?: ProviderTokenUsage;
+  stopped?: boolean;
 };
 
 type ReviewEntry = {
@@ -110,6 +120,21 @@ function lastAssistantText(messages: Message[]): string | null {
   return null;
 }
 
+function formatTokenUsage(usage?: ProviderTokenUsage): string | null {
+  if (!usage) return null;
+  const total =
+    usage.totalTokens ??
+    (usage.inputTokens !== undefined && usage.outputTokens !== undefined
+      ? usage.inputTokens + usage.outputTokens
+      : undefined);
+  if (total === undefined) return null;
+  const breakdown =
+    usage.inputTokens !== undefined && usage.outputTokens !== undefined
+      ? ` (${usage.inputTokens.toLocaleString()} in / ${usage.outputTokens.toLocaleString()} out)`
+      : "";
+  return `${total.toLocaleString()} tokens${breakdown}`;
+}
+
 export default function WorkspacePage() {
   // Stable Provider instances for this milestone's fixed scope. Each id in
   // WORKSPACE_PROVIDER_IDS is guaranteed registered in the factory, so the
@@ -132,6 +157,25 @@ export default function WorkspacePage() {
   const [selectedIds, setSelectedIds] = useState<Set<ProviderId>>(
     () => new Set(WORKSPACE_PROVIDER_IDS),
   );
+  const [availableModels, setAvailableModels] = useState<
+    Partial<Record<ProviderId, ProviderModel[]>>
+  >({});
+  const [selectedModelIds, setSelectedModelIds] = useState<
+    Partial<Record<ProviderId, string>>
+  >(() =>
+    Object.fromEntries(
+      providers.map(({ id, provider }) => [id, provider.defaultModelId]),
+    ),
+  );
+  const [modelsLoadingIds, setModelsLoadingIds] = useState<Set<ProviderId>>(
+    new Set(),
+  );
+  const [modelErrors, setModelErrors] = useState<
+    Partial<Record<ProviderId, string>>
+  >({});
+  const abortControllersRef = useRef<
+    Partial<Record<ProviderId, AbortController>>
+  >({});
   const [systemPrompt, setSystemPrompt] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -219,6 +263,15 @@ export default function WorkspacePage() {
 
     return {
       selectedProviderIds: [...selectedIds],
+      selectedModelIds,
+      responseUsage: Object.fromEntries(
+        Object.entries(results)
+          .filter(([, result]) => result?.usage)
+          .map(([providerId, result]) => [providerId, result!.usage!]),
+      ),
+      stoppedProviderIds: Object.entries(results)
+        .filter(([, result]) => result?.stopped)
+        .map(([providerId]) => providerId as ProviderId),
       systemPrompt,
       userPrompt,
       conversations,
@@ -234,7 +287,9 @@ export default function WorkspacePage() {
     recommendation,
     recommendationProviderId,
     reviews,
+    results,
     selectedIds,
+    selectedModelIds,
     systemPrompt,
     userPrompt,
   ]);
@@ -247,6 +302,12 @@ export default function WorkspacePage() {
       setSelectedIds(
         new Set(selected.length > 0 ? selected : WORKSPACE_PROVIDER_IDS),
       );
+      setSelectedModelIds({
+        ...Object.fromEntries(
+          providers.map(({ id, provider }) => [id, provider.defaultModelId]),
+        ),
+        ...snapshot.selectedModelIds,
+      });
       setSystemPrompt(snapshot.systemPrompt);
       setUserPrompt(snapshot.userPrompt);
       setConversations(snapshot.conversations);
@@ -258,7 +319,16 @@ export default function WorkspacePage() {
       const completedResults = Object.fromEntries(
         Object.entries(snapshot.conversations)
           .filter(([, messages]) => messages && messages.length > 0)
-          .map(([providerId]) => [providerId, { status: "done" as const }]),
+          .map(([providerId]) => [
+            providerId,
+            {
+              status: "done" as const,
+              usage: snapshot.responseUsage[providerId as ProviderId],
+              stopped: snapshot.stoppedProviderIds.includes(
+                providerId as ProviderId,
+              ),
+            },
+          ]),
       ) as Partial<Record<ProviderId, ExecutionState>>;
       setResults(completedResults);
       setHasRun(Object.keys(completedResults).length > 0);
@@ -275,7 +345,7 @@ export default function WorkspacePage() {
       setRecommendationCollapsed(false);
       setRecommendationCopied(false);
     },
-    [],
+    [providers],
   );
 
   useEffect(() => {
@@ -326,6 +396,64 @@ export default function WorkspacePage() {
     buildProjectSnapshot,
     projectsHydrated,
   ]);
+
+  useEffect(() => {
+    if (!projectsHydrated) return;
+    let cancelled = false;
+
+    setModelsLoadingIds(new Set(WORKSPACE_PROVIDER_IDS));
+    void Promise.all(
+      providers.map(async ({ id, provider }) => {
+        try {
+          const credentials = await connectionManager.get(id);
+          if (!credentials) return;
+          const models = await provider.getModels(credentials);
+          if (cancelled) return;
+          setAvailableModels((current) => ({ ...current, [id]: models }));
+          setSelectedModelIds((current) => {
+            const selected = current[id];
+            if (selected && models.some((model) => model.id === selected)) {
+              return current;
+            }
+            const nextModel =
+              models.find((model) => model.id === provider.defaultModelId)?.id ??
+              models[0]?.id ??
+              provider.defaultModelId;
+            return nextModel ? { ...current, [id]: nextModel } : current;
+          });
+          setModelErrors((current) => {
+            const next = { ...current };
+            delete next[id];
+            return next;
+          });
+        } catch (error) {
+          if (cancelled) return;
+          if (error instanceof Error && error.name === "AuthenticationError") {
+            await connectionManager.clear(id);
+          }
+          setModelErrors((current) => ({
+            ...current,
+            [id]:
+              error instanceof Error
+                ? error.message
+                : "Unable to load models.",
+          }));
+        } finally {
+          if (!cancelled) {
+            setModelsLoadingIds((current) => {
+              const next = new Set(current);
+              next.delete(id);
+              return next;
+            });
+          }
+        }
+      }),
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectsHydrated, providers]);
 
   // Auto-scroll: only follow new messages when the user is already near the
   // page bottom. Tracked continuously so a user who scrolled up to read
@@ -444,6 +572,7 @@ export default function WorkspacePage() {
           focus,
         ),
         credentials: credentials ?? undefined,
+        modelId: selectedModelIds[reviewerId],
       });
       setReviews((prev) => ({
         ...prev,
@@ -625,6 +754,7 @@ export default function WorkspacePage() {
       const result = await provider!.executePrompt({
         messages,
         credentials: credentials ?? undefined,
+        modelId: selectedModelIds[providerId],
       });
       return { ok: true, text: result.text };
     } catch (error) {
@@ -926,21 +1056,41 @@ export default function WorkspacePage() {
     baseConversation: Message[],
     userContent: string,
   ) {
+    const controller = new AbortController();
+    abortControllersRef.current[id]?.abort();
+    abortControllersRef.current[id] = controller;
+    let streamedText = "";
+
     setResults((prev) => ({
       ...prev,
-      [id]: { status: "loading", pendingUser: userContent },
+      [id]: {
+        status: "loading",
+        pendingUser: userContent,
+        streamedText: "",
+      },
     }));
 
     try {
       const connected = await connectionManager.isConnected(id);
+      if (controller.signal.aborted) {
+        if (abortControllersRef.current[id] === controller) {
+          setResults((prev) => ({
+            ...prev,
+            [id]: { status: "error", error: "Generation stopped." },
+          }));
+        }
+        return;
+      }
       if (!connected) {
-        setResults((prev) => ({
-          ...prev,
-          [id]: {
-            status: "error",
-            error: "Not connected. Connect this provider first.",
-          },
-        }));
+        if (abortControllersRef.current[id] === controller) {
+          setResults((prev) => ({
+            ...prev,
+            [id]: {
+              status: "error",
+              error: "Not connected. Connect this provider first.",
+            },
+          }));
+        }
         return;
       }
 
@@ -955,7 +1105,22 @@ export default function WorkspacePage() {
           { role: "user" as const, content: userContent },
         ],
         credentials: credentials ?? undefined,
+        modelId: selectedModelIds[id],
+        signal: controller.signal,
+        onChunk: (chunk) => {
+          if (abortControllersRef.current[id] !== controller) return;
+          streamedText += chunk;
+          setResults((prev) => ({
+            ...prev,
+            [id]: {
+              status: "loading",
+              pendingUser: userContent,
+              streamedText,
+            },
+          }));
+        },
       });
+      if (abortControllersRef.current[id] !== controller) return;
       setConversations((prev) => ({
         ...prev,
         [id]: [
@@ -966,9 +1131,33 @@ export default function WorkspacePage() {
       }));
       setResults((prev) => ({
         ...prev,
-        [id]: { status: "done" },
+        [id]: { status: "done", usage: result.usage },
       }));
     } catch (error) {
+      if (abortControllersRef.current[id] !== controller) return;
+      if (controller.signal.aborted) {
+        if (streamedText) {
+          setConversations((prev) => ({
+            ...prev,
+            [id]: [
+              ...baseConversation,
+              { role: "user", content: userContent },
+              { role: "assistant", content: streamedText },
+            ],
+          }));
+          setResults((prev) => ({
+            ...prev,
+            [id]: { status: "done", stopped: true },
+          }));
+        } else {
+          setResults((prev) => ({
+            ...prev,
+            [id]: { status: "error", error: "Generation stopped." },
+          }));
+        }
+        return;
+      }
+
       const message =
         error instanceof Error ? error.message : "Something went wrong.";
       if (error instanceof Error && error.name === "AuthenticationError") {
@@ -978,7 +1167,15 @@ export default function WorkspacePage() {
         ...prev,
         [id]: { status: "error", error: message },
       }));
+    } finally {
+      if (abortControllersRef.current[id] === controller) {
+        delete abortControllersRef.current[id];
+      }
     }
+  }
+
+  function stopGeneration(id: ProviderId) {
+    abortControllersRef.current[id]?.abort();
   }
 
   async function handleRun() {
@@ -1155,64 +1352,117 @@ export default function WorkspacePage() {
             <div className="flex flex-col gap-2">
               {providers.map(({ id, provider }) => {
                 const checked = selectedIds.has(id);
+                const models = availableModels[id] ?? [];
+                const selectedModel =
+                  selectedModelIds[id] ?? provider.defaultModelId ?? "";
+                const modelOptions =
+                  selectedModel &&
+                  !models.some((model) => model.id === selectedModel)
+                    ? [
+                        { id: selectedModel, name: selectedModel },
+                        ...models,
+                      ]
+                    : models;
                 return (
-                  <label
+                  <div
                     key={id}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg"
+                    className="flex items-center gap-3 rounded-lg"
                     style={{
                       background: "var(--color-glass)",
                       border: "1px solid var(--color-border)",
                       padding: "10px 14px",
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleProvider(id)}
-                      className="sr-only"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: 4,
-                        border: checked
-                          ? "1px solid var(--color-accent)"
-                          : "1px solid var(--color-border)",
-                        background: checked ? "var(--color-accent)" : "transparent",
-                        flexShrink: 0,
-                      }}
+                    <label
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
                     >
-                      {checked && (
-                        <svg
-                          width="10"
-                          height="10"
-                          viewBox="0 0 10 10"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M1.5 5L4 7.5L8.5 2"
-                            stroke="#06070B"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </span>
-                    <span
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleProvider(id)}
+                        className="sr-only"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="flex items-center justify-center"
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: 4,
+                          border: checked
+                            ? "1px solid var(--color-accent)"
+                            : "1px solid var(--color-border)",
+                          background: checked
+                            ? "var(--color-accent)"
+                            : "transparent",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {checked && (
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 10 10"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M1.5 5L4 7.5L8.5 2"
+                              stroke="#06070B"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontSize: "0.9rem",
+                          color: "var(--color-text)",
+                        }}
+                      >
+                        {provider.displayName}
+                      </span>
+                    </label>
+                    <select
+                      aria-label={`${provider.displayName} model`}
+                      value={selectedModel}
+                      disabled={
+                        modelsLoadingIds.has(id) ||
+                        results[id]?.status === "loading"
+                      }
+                      title={modelErrors[id]}
+                      onChange={(event) =>
+                        setSelectedModelIds((current) => ({
+                          ...current,
+                          [id]: event.target.value,
+                        }))
+                      }
                       style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: "0.9rem",
+                        maxWidth: 220,
+                        minWidth: 0,
+                        background: "var(--color-bg)",
+                        border: "1px solid var(--color-border)",
                         color: "var(--color-text)",
+                        borderRadius: 8,
+                        padding: "5px 8px",
+                        fontFamily: "var(--font-body)",
+                        fontSize: "0.75rem",
                       }}
                     >
-                      {provider.displayName}
-                    </span>
-                  </label>
+                      {modelsLoadingIds.has(id) && modelOptions.length === 0 ? (
+                        <option value="">Loading models...</option>
+                      ) : (
+                        modelOptions.map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
                 );
               })}
             </div>
@@ -1419,12 +1669,29 @@ export default function WorkspacePage() {
                       >
                         {provider.displayName}
                       </h2>
-                      {latestResponse !== null && (
+                      {result?.status === "loading" ? (
+                        <button
+                          type="button"
+                          onClick={() => stopGeneration(id)}
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-text)",
+                            background: "var(--color-glass)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: 999,
+                            padding: "4px 10px",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
+                        >
+                          Stop generation
+                        </button>
+                      ) : latestResponse !== null ? (
                         <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                           <button
                             type="button"
                             onClick={() => handleRegenerate(id)}
-                            disabled={result?.status === "loading"}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -1512,7 +1779,7 @@ export default function WorkspacePage() {
                             Review
                           </button>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                     {reviewDialogFor === id && (
                       <ReviewDialog
@@ -1541,6 +1808,8 @@ export default function WorkspacePage() {
                           `${stats.wordCount.toLocaleString()} ${stats.wordCount === 1 ? "word" : "words"}`,
                           stats.readingTimeLabel,
                           `${stats.characterCount.toLocaleString()} ${stats.characterCount === 1 ? "character" : "characters"}`,
+                          formatTokenUsage(result?.usage),
+                          result?.stopped ? "Stopped" : null,
                           stats.codeBlockCount > 0
                             ? `${stats.codeBlockCount} ${stats.codeBlockCount === 1 ? "code block" : "code blocks"}`
                             : null,
@@ -1710,19 +1979,28 @@ export default function WorkspacePage() {
                                         {result.pendingUser}
                                       </p>
                                     )}
-                                    <p
-                                      className="rounded-lg self-start"
-                                      style={{
-                                        fontFamily: "var(--font-body)",
-                                        fontSize: "0.85rem",
-                                        color: "var(--color-muted)",
-                                        background: "var(--color-glass)",
-                                        border: "1px solid var(--color-border)",
-                                        padding: "8px 12px",
-                                      }}
-                                    >
-                                      Thinking...
-                                    </p>
+                                    {result.streamedText ? (
+                                      <div aria-live="polite">
+                                        <MarkdownResponse
+                                          text={result.streamedText}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <p
+                                        className="rounded-lg self-start"
+                                        style={{
+                                          fontFamily: "var(--font-body)",
+                                          fontSize: "0.85rem",
+                                          color: "var(--color-muted)",
+                                          background: "var(--color-glass)",
+                                          border:
+                                            "1px solid var(--color-border)",
+                                          padding: "8px 12px",
+                                        }}
+                                      >
+                                        Thinking...
+                                      </p>
+                                    )}
                                   </>
                                 )}
                               </div>

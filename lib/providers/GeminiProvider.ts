@@ -21,6 +21,7 @@ export class GeminiProvider extends BaseProvider {
     "Connect your Gemini account to track models and generation capabilities.";
   readonly documentationUrl = "https://ai.google.dev/gemini-api/docs";
   readonly logo = "/coins/gemini.png";
+  readonly defaultModelId = "gemini-2.0-flash";
   readonly capabilities: ProviderCapabilities = {
     models: true,
     usage: false,
@@ -80,7 +81,10 @@ export class GeminiProvider extends BaseProvider {
     if (!apiKey) {
       throw new GeminiClientError("An API key is required.", "invalid_api_key");
     }
-    const text = await generateCompletion(apiKey, request.messages);
-    return { text };
+    return generateCompletion(apiKey, request.messages, {
+      modelId: request.modelId,
+      signal: request.signal,
+      onChunk: request.onChunk,
+    });
   }
 }

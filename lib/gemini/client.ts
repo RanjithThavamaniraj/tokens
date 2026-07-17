@@ -1,5 +1,9 @@
 import { GoogleGenAI, type Model } from "@google/genai";
-import type { Message } from "@/lib/providers/Provider";
+import type {
+  Message,
+  ProviderExecutionResult,
+  ProviderTokenUsage,
+} from "@/lib/providers/Provider";
 import type { GeminiModelSummary } from "./types";
 import { normalizeGeminiError } from "./errors";
 
@@ -21,8 +25,14 @@ export async function listModels(apiKey: string): Promise<GeminiModelSummary[]> 
     for await (const model of pager) {
       const typedModel: Model = model;
       if (!typedModel.name) continue;
+      if (
+        typedModel.supportedActions &&
+        !typedModel.supportedActions.includes("generateContent")
+      ) {
+        continue;
+      }
       summaries.push({
-        id: typedModel.name,
+        id: typedModel.name.replace(/^models\//, ""),
         displayName: typedModel.displayName ?? typedModel.name,
       });
     }
@@ -46,7 +56,12 @@ export async function listModels(apiKey: string): Promise<GeminiModelSummary[]> 
 export async function generateCompletion(
   apiKey: string,
   messages: Message[],
-): Promise<string> {
+  options?: {
+    modelId?: string;
+    signal?: AbortSignal;
+    onChunk?: (chunk: string) => void;
+  },
+): Promise<ProviderExecutionResult> {
   try {
     const systemInstruction = messages
       .filter((message) => message.role === "system")
@@ -63,13 +78,44 @@ export async function generateCompletion(
       }));
 
     const client = createSdkClient(apiKey);
-    const response = await client.models.generateContent({
-      model: "gemini-2.0-flash",
+    const response = await client.models.generateContentStream({
+      model: options?.modelId ?? "gemini-2.0-flash",
       contents,
-      ...(systemInstruction ? { config: { systemInstruction } } : {}),
+      ...((systemInstruction || options?.signal)
+        ? {
+            config: {
+              ...(systemInstruction ? { systemInstruction } : {}),
+              ...(options?.signal ? { abortSignal: options.signal } : {}),
+            },
+          }
+        : {}),
     });
-    return response.text ?? "";
+    let text = "";
+    let usage: ProviderTokenUsage | undefined;
+
+    for await (const chunk of response) {
+      const content = chunk.text ?? "";
+      if (content) {
+        text += content;
+        options?.onChunk?.(content);
+      }
+      if (chunk.usageMetadata) {
+        usage = {
+          inputTokens: chunk.usageMetadata.promptTokenCount,
+          outputTokens: chunk.usageMetadata.candidatesTokenCount,
+          totalTokens: chunk.usageMetadata.totalTokenCount,
+        };
+      }
+    }
+
+    return { text, ...(usage ? { usage } : {}) };
   } catch (error) {
+    if (
+      options?.signal?.aborted ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      throw error;
+    }
     throw normalizeGeminiError(error);
   }
 }

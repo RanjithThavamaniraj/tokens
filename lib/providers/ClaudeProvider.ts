@@ -21,6 +21,7 @@ export class ClaudeProvider extends BaseProvider {
     "Connect your Anthropic account to track models, usage, and billing.";
   readonly documentationUrl = "https://platform.claude.com/docs";
   readonly logo = "/coins/claude.png";
+  readonly defaultModelId = "claude-haiku-4-5";
   readonly capabilities: ProviderCapabilities = {
     models: true,
     usage: true,
@@ -83,7 +84,10 @@ export class ClaudeProvider extends BaseProvider {
     if (!apiKey) {
       throw new AnthropicClientError("An API key is required.", "invalid_api_key");
     }
-    const text = await generateCompletion(apiKey, request.messages);
-    return { text };
+    return generateCompletion(apiKey, request.messages, {
+      modelId: request.modelId,
+      signal: request.signal,
+      onChunk: request.onChunk,
+    });
   }
 }

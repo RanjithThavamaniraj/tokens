@@ -1,26 +1,30 @@
-import OpenAI from "openai";
-import type { Message } from "@/lib/providers/Provider";
+import type {
+  Message,
+  ProviderExecutionResult,
+} from "@/lib/providers/Provider";
+import {
+  listOpenAICompatibleModels,
+  streamOpenAICompatibleCompletion,
+} from "@/lib/openai-compatible/client";
 import type { OpenAIModelSummary } from "./types";
 import { normalizeOpenAIError } from "./errors";
-
-function createSdkClient(apiKey: string): OpenAI {
-  return new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
-}
 
 // Used for BOTH validation (connect() calls this and discards the result —
 // if it doesn't throw, the key is valid) AND real model retrieval
 // (getModels() calls this and returns the result). No caching anywhere in
 // this file — every call hits the network.
 export async function listModels(apiKey: string): Promise<OpenAIModelSummary[]> {
-  try {
-    const client = createSdkClient(apiKey);
-    const response = await client.models.list();
-    const models = response.data.map((model) => ({ id: model.id }));
-    models.sort((a, b) => a.id.localeCompare(b.id));
-    return models;
-  } catch (error) {
-    throw normalizeOpenAIError(error);
-  }
+  const models = await listOpenAICompatibleModels({
+    apiKey,
+    normalizeError: normalizeOpenAIError,
+  });
+  return models.filter(
+    (model) =>
+      /^(gpt-|chatgpt-|o[1-9](?:-|$))/i.test(model.id) &&
+      !/(audio|embedding|image|moderation|realtime|transcribe|tts)/i.test(
+        model.id,
+      ),
+  );
 }
 
 // Used by OpenAIProvider.executePrompt() for real prompt execution against
@@ -32,18 +36,18 @@ export async function listModels(apiKey: string): Promise<OpenAIModelSummary[]> 
 export async function generateCompletion(
   apiKey: string,
   messages: Message[],
-): Promise<string> {
-  try {
-    const client = createSdkClient(apiKey);
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      })),
-    });
-    return response.choices[0]?.message?.content ?? "";
-  } catch (error) {
-    throw normalizeOpenAIError(error);
-  }
+  options?: {
+    modelId?: string;
+    signal?: AbortSignal;
+    onChunk?: (chunk: string) => void;
+  },
+): Promise<ProviderExecutionResult> {
+  return streamOpenAICompatibleCompletion({
+    apiKey,
+    messages,
+    model: options?.modelId ?? "gpt-4o-mini",
+    signal: options?.signal,
+    onChunk: options?.onChunk,
+    normalizeError: normalizeOpenAIError,
+  });
 }
