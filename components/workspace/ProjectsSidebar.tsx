@@ -33,6 +33,8 @@ export default function ProjectsSidebar({
 }: ProjectsSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
 
   function startRename(project: Project) {
     setEditingId(project.id);
@@ -73,10 +75,10 @@ export default function ProjectsSidebar({
           </h2>
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || creating}
             onClick={() => {
-              const name = window.prompt("Project name");
-              if (name?.trim()) onCreate(name.trim());
+              setCreating(true);
+              setNewProjectName("");
             }}
             style={{
               fontFamily: "var(--font-body)",
@@ -86,14 +88,69 @@ export default function ProjectsSidebar({
               border: "1px solid var(--color-border)",
               borderRadius: 999,
               padding: "4px 9px",
-              cursor: disabled ? "not-allowed" : "pointer",
-              opacity: disabled ? 0.6 : 1,
+              cursor: disabled || creating ? "not-allowed" : "pointer",
+              opacity: disabled || creating ? 0.6 : 1,
               flexShrink: 0,
             }}
           >
             + New Project
           </button>
         </div>
+
+        {creating && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (newProjectName.trim()) {
+                onCreate(newProjectName.trim());
+                setCreating(false);
+                setNewProjectName("");
+              }
+            }}
+            className="mt-3 flex flex-col gap-2"
+          >
+            <label className="sr-only" htmlFor="new-project">
+              Project name
+            </label>
+            <input
+              id="new-project"
+              autoFocus
+              value={newProjectName}
+              onChange={(event) => setNewProjectName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setCreating(false);
+                  setNewProjectName("");
+                }
+              }}
+              className="w-full rounded-lg"
+              style={{
+                background: "var(--color-glass)",
+                border: "1px solid var(--color-border)",
+                color: "var(--color-text)",
+                padding: "5px 8px",
+                fontFamily: "var(--font-body)",
+                fontSize: "0.8rem",
+              }}
+              placeholder="Project name"
+            />
+            <div className="flex items-center gap-3">
+              <button type="submit" style={actionStyle}>
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreating(false);
+                  setNewProjectName("");
+                }}
+                style={actionStyle}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         {projects.length === 0 ? (
           <p

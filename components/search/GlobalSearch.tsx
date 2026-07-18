@@ -44,7 +44,7 @@ export default function GlobalSearch() {
           background: "var(--color-glass)",
           border: "1px solid var(--color-border)",
           color: "var(--color-muted)",
-          padding: "6px 14px",
+          padding: "6px 9px",
           fontFamily: "var(--font-body)",
           fontSize: "0.8rem",
           cursor: "pointer",
@@ -63,8 +63,9 @@ export default function GlobalSearch() {
           <circle cx="11" cy="11" r="7" />
           <line x1="21" y1="21" x2="16.5" y2="16.5" />
         </svg>
-        <span>Search</span>
+        <span className="hidden sm:inline">Search</span>
         <kbd
+          className="hidden sm:inline"
           style={{
             fontFamily: "var(--font-body)",
             fontSize: "0.66rem",

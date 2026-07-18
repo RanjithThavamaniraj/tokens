@@ -155,7 +155,7 @@ export function aggregateUsageDashboard(
 
       const prompts = messages.filter((message) => message.role === "user").length;
       const responses = messages.filter(
-        (message) => message.role === "assistant",
+        (message) => message.role === "assistant" && message.content.trim() !== "",
       ).length;
       projectPrompts += prompts;
       projectResponses += responses;

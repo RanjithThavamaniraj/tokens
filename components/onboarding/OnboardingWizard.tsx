@@ -30,7 +30,17 @@ const STEP_IDS = ONBOARDING_STEPS.map((step) => step.id);
 
 export default function OnboardingWizard() {
   const router = useRouter();
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const stored = window.sessionStorage.getItem("tokens:onboarding:step");
+    if (!stored) return 0;
+    try {
+      const index = parseInt(stored, 10);
+      return Math.max(0, Math.min(index, STEP_IDS.length - 1));
+    } catch {
+      return 0;
+    }
+  });
   const [providers, setProviders] = useState<OnboardingProviderCard[]>([]);
   const [projectName, setProjectName] = useState("My Project");
   const [createdProjectName, setCreatedProjectName] = useState<string | null>(
@@ -43,6 +53,11 @@ export default function OnboardingWizard() {
   const stepId = STEP_IDS[stepIndex] ?? "welcome";
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === STEP_IDS.length - 1;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem("tokens:onboarding:step", String(stepIndex));
+  }, [stepIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +97,9 @@ export default function OnboardingWizard() {
     try {
       if (prompt.trim()) {
         onboardingService.stashPrompt({ userPrompt: prompt.trim() });
+      }
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("tokens:onboarding:step");
       }
       await onboardingService.complete();
       router.push(navigateTo ?? "/workspace");
