@@ -16,7 +16,6 @@ const PROVIDERS: {
   name: string;
   coin: string;
   slug: string;
-  comingSoon?: boolean;
 }[] = [
   { name: "OpenAI", coin: "/coins/openai.png", slug: "openai" },
   { name: "Claude", coin: "/coins/claude.png", slug: "claude" },
@@ -26,13 +25,16 @@ const PROVIDERS: {
     name: "GitHub Copilot",
     coin: "/coins/github-copilot.png",
     slug: "github-copilot",
-    comingSoon: true,
   },
   { name: "Perplexity", coin: "/coins/perplexity.png", slug: "perplexity" },
 ];
 
+// The coin artwork has a bright warm backdrop baked into the PNG; it, not
+// the CSS gradient, is what reads as an orange halo. The coin rim sits at
+// ~81-83% of the image half-width, so fading the mask from 80% to 88% clips
+// the baked backdrop right at the rim while keeping the metal crisp.
 const COIN_MASK =
-  "radial-gradient(closest-side, rgba(0,0,0,1) 78%, rgba(0,0,0,0) 100%)";
+  "radial-gradient(closest-side, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 88%)";
 
 export default function OneWorkspace() {
   return (
@@ -141,15 +143,6 @@ export default function OneWorkspace() {
                     height: "min(56vw, 240px)",
                   }}
                 >
-                  <div
-                    className="absolute inset-0 transition-opacity duration-300 ease-out opacity-65 group-hover:opacity-85"
-                    aria-hidden="true"
-                    style={{
-                      background:
-                        "radial-gradient(closest-side, rgba(238,123,48,0.10), transparent 66%)",
-                      transform: "scale(1.22)",
-                    }}
-                  />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={provider.coin}
@@ -158,6 +151,9 @@ export default function OneWorkspace() {
                     style={{
                       WebkitMaskImage: COIN_MASK,
                       maskImage: COIN_MASK,
+                      // Soft studio contact shadow — dark, tight, no color cast.
+                      filter:
+                        "drop-shadow(0 10px 14px rgba(0,0,0,0.45)) drop-shadow(0 2px 4px rgba(0,0,0,0.35))",
                     }}
                   />
                 </motion.div>
@@ -173,24 +169,6 @@ export default function OneWorkspace() {
                 >
                   {provider.name}
                 </p>
-                {provider.comingSoon && (
-                  <p
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: "0.78rem",
-                      fontWeight: 500,
-                      letterSpacing: "0.06em",
-                      // 0.45 measured ~4.4:1 against the page background,
-                      // just under the AA 4.5:1 threshold for this text
-                      // size; 0.6 gives a comfortable ~6:1 while staying in
-                      // the same muted visual family.
-                      color: "rgba(248,250,252,0.6)",
-                      marginTop: 6,
-                    }}
-                  >
-                    Coming Soon
-                  </p>
-                )}
               </Link>
             </motion.div>
           ))}
