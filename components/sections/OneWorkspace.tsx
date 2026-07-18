@@ -173,12 +173,12 @@ export default function OneWorkspace() {
                   }}
                 >
                   <div
-                    className="absolute inset-0 transition-opacity duration-300 ease-out opacity-70 group-hover:opacity-100"
+                    className="absolute inset-0 transition-opacity duration-300 ease-out opacity-65 group-hover:opacity-85"
                     aria-hidden="true"
                     style={{
                       background:
-                        "radial-gradient(closest-side, rgba(238,123,48,0.16), transparent 72%)",
-                      transform: "scale(1.35)",
+                        "radial-gradient(closest-side, rgba(238,123,48,0.10), transparent 66%)",
+                      transform: "scale(1.22)",
                     }}
                   />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
