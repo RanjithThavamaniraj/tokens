@@ -232,7 +232,14 @@ export default function ProviderPage({
         >
           <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
-          <div style={{ marginTop: 24 }}>{tabContent}</div>
+          <div
+            role="tabpanel"
+            id="provider-tabpanel"
+            aria-labelledby={`tab-${activeTab}`}
+            style={{ marginTop: 24 }}
+          >
+            {tabContent}
+          </div>
         </motion.div>
       </div>
     </main>

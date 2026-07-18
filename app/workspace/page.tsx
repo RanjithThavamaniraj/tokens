@@ -1899,6 +1899,7 @@ export default function WorkspacePage() {
                           <button
                             type="button"
                             onClick={() => handleRegenerate(id)}
+                            aria-label={`Regenerate ${provider.displayName}'s response`}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -1916,6 +1917,7 @@ export default function WorkspacePage() {
                           <button
                             type="button"
                             onClick={() => startNewConversation(id)}
+                            aria-label={`Start a new conversation with ${provider.displayName}`}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -1933,6 +1935,7 @@ export default function WorkspacePage() {
                           <button
                             type="button"
                             onClick={() => handleCopyResponse(id, latestResponse)}
+                            aria-label={copiedId === id ? `Copied ${provider.displayName}'s response` : `Copy ${provider.displayName}'s response`}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -1950,6 +1953,8 @@ export default function WorkspacePage() {
                           <button
                             type="button"
                             onClick={() => toggleCollapsed(id)}
+                            aria-expanded={!collapsedIds.has(id)}
+                            aria-label={`${collapsedIds.has(id) ? "Expand" : "Collapse"} ${provider.displayName}'s response`}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -1971,6 +1976,8 @@ export default function WorkspacePage() {
                                 reviewDialogFor === id ? null : id,
                               )
                             }
+                            aria-label={`Ask another AI to review ${provider.displayName}'s response`}
+                            aria-expanded={reviewDialogFor === id}
                             style={{
                               fontFamily: "var(--font-body)",
                               fontSize: "0.75rem",
@@ -2076,6 +2083,7 @@ export default function WorkspacePage() {
                                           }
                                           rows={3}
                                           className="w-full rounded-lg"
+                                          aria-label="Edit your message"
                                           style={{
                                             background: "var(--color-glass)",
                                             border: "1px solid var(--color-border)",

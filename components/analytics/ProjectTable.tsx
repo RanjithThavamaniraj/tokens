@@ -36,7 +36,7 @@ export default function ProjectTable({
           <tr>
             {["Project", "Conversations", "Prompts", "Responses", "Last updated"].map(
               (header) => (
-                <th key={header} style={thStyle}>
+                <th key={header} scope="col" style={thStyle}>
                   {header}
                 </th>
               ),

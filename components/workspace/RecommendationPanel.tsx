@@ -49,7 +49,7 @@ export default function RecommendationPanel({
         marginTop: 16,
       }}
     >
-      <p
+      <h2
         style={{
           fontFamily: "var(--font-heading)",
           fontSize: "0.85rem",
@@ -58,7 +58,7 @@ export default function RecommendationPanel({
         }}
       >
         Final Recommendation
-      </p>
+      </h2>
 
       <p
         style={{
@@ -163,7 +163,7 @@ export default function RecommendationPanel({
       {recommendation?.status === "done" && recommendation.text && (
         <div style={{ marginTop: 12 }}>
           <div className="flex items-center justify-between gap-3">
-            <p
+            <h3
               style={{
                 fontFamily: "var(--font-body)",
                 fontSize: "0.82rem",
@@ -173,11 +173,12 @@ export default function RecommendationPanel({
               }}
             >
               Recommendation
-            </p>
+            </h3>
             <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
               <button
                 type="button"
                 onClick={onCopy}
+                aria-label={copied ? "Copied recommendation" : "Copy recommendation"}
                 style={{
                   fontFamily: "var(--font-body)",
                   fontSize: "0.75rem",
@@ -195,6 +196,8 @@ export default function RecommendationPanel({
               <button
                 type="button"
                 onClick={onToggleCollapse}
+                aria-expanded={!collapsed}
+                aria-label={`${collapsed ? "Expand" : "Collapse"} recommendation`}
                 style={{
                   fontFamily: "var(--font-body)",
                   fontSize: "0.75rem",

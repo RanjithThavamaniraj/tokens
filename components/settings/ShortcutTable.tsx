@@ -15,6 +15,7 @@ export default function ShortcutTable({ isMac }: { isMac: boolean }) {
         <thead>
           <tr>
             <th
+              scope="col"
               style={{
                 textAlign: "left",
                 padding: "10px 14px",
@@ -27,6 +28,7 @@ export default function ShortcutTable({ isMac }: { isMac: boolean }) {
               Shortcut
             </th>
             <th
+              scope="col"
               style={{
                 textAlign: "left",
                 padding: "10px 14px",

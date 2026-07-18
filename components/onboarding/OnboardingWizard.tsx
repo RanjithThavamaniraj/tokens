@@ -146,6 +146,8 @@ export default function OnboardingWizard() {
     >
       <div className="flex items-center justify-between gap-3">
         <p
+          role="status"
+          aria-live="polite"
           style={{
             fontFamily: "var(--font-body)",
             fontSize: "0.78rem",

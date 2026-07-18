@@ -54,6 +54,7 @@ export default function ReviewResult({
             <button
               type="button"
               onClick={onCopy}
+              aria-label={copied ? `Copied review by ${reviewerDisplayName}` : `Copy review by ${reviewerDisplayName}`}
               style={{
                 fontFamily: "var(--font-body)",
                 fontSize: "0.75rem",
@@ -71,6 +72,8 @@ export default function ReviewResult({
             <button
               type="button"
               onClick={onToggleCollapse}
+              aria-expanded={!collapsed}
+              aria-label={`${collapsed ? "Expand" : "Collapse"} review by ${reviewerDisplayName}`}
               style={{
                 fontFamily: "var(--font-body)",
                 fontSize: "0.75rem",

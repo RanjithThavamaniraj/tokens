@@ -44,6 +44,7 @@ export default function PromptLibraryPanel({
       <button
         type="button"
         onClick={() => setIsExpanded((prev) => !prev)}
+        aria-expanded={isExpanded}
         className="flex w-full items-center justify-between"
         style={{
           background: "transparent",
@@ -80,6 +81,7 @@ export default function PromptLibraryPanel({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search prompts..."
+            aria-label="Search prompts"
             className="w-full rounded-lg"
             style={{
               background: "var(--color-bg)",

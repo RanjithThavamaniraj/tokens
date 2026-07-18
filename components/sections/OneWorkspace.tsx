@@ -180,7 +180,11 @@ export default function OneWorkspace() {
                       fontSize: "0.78rem",
                       fontWeight: 500,
                       letterSpacing: "0.06em",
-                      color: "rgba(248,250,252,0.45)",
+                      // 0.45 measured ~4.4:1 against the page background,
+                      // just under the AA 4.5:1 threshold for this text
+                      // size; 0.6 gives a comfortable ~6:1 while staying in
+                      // the same muted visual family.
+                      color: "rgba(248,250,252,0.6)",
                       marginTop: 6,
                     }}
                   >

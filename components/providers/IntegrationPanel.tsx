@@ -194,6 +194,12 @@ export default function IntegrationPanel({
                     [field.id]: event.target.value,
                   }))
                 }
+                aria-invalid={status === "error" ? true : undefined}
+                aria-describedby={
+                  status === "error" && errorMessage
+                    ? "integration-connect-error"
+                    : undefined
+                }
                 className="w-full rounded-lg"
                 style={{
                   background: "var(--color-glass)",
@@ -223,6 +229,7 @@ export default function IntegrationPanel({
         {status === "success" ? (
           <div>
             <p
+              role="status"
               style={{
                 fontFamily: "var(--font-body)",
                 fontSize: "0.85rem",
@@ -273,6 +280,7 @@ export default function IntegrationPanel({
 
             {refreshError && (
               <p
+                role="alert"
                 style={{
                   fontFamily: "var(--font-body)",
                   fontSize: "0.8rem",
@@ -306,6 +314,8 @@ export default function IntegrationPanel({
 
         {status === "error" && errorMessage && (
           <p
+            id="integration-connect-error"
+            role="alert"
             style={{
               fontFamily: "var(--font-body)",
               fontSize: "0.8rem",

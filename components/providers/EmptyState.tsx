@@ -1,6 +1,8 @@
 export default function EmptyState({ text }: { text: string }) {
   return (
     <div
+      role="status"
+      aria-live="polite"
       className="flex items-center justify-center text-center"
       style={{ padding: "64px 24px" }}
     >

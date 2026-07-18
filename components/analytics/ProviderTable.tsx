@@ -44,7 +44,7 @@ export default function ProviderTable({
               "Est. tokens",
               "Est. cost",
             ].map((header) => (
-              <th key={header} style={thStyle}>
+              <th key={header} scope="col" style={thStyle}>
                 {header}
               </th>
             ))}

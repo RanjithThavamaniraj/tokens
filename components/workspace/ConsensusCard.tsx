@@ -9,7 +9,7 @@ import type {
 
 function sectionHeading(text: string) {
   return (
-    <p
+    <h3
       style={{
         fontFamily: "var(--font-body)",
         fontSize: "0.75rem",
@@ -19,7 +19,7 @@ function sectionHeading(text: string) {
       }}
     >
       {text}
-    </p>
+    </h3>
   );
 }
 
@@ -88,7 +88,7 @@ export default function ConsensusCard({ result }: { result: ConsensusV2Result })
         marginBottom: 16,
       }}
     >
-      <p
+      <h2
         style={{
           fontFamily: "var(--font-heading)",
           fontSize: "0.85rem",
@@ -97,7 +97,7 @@ export default function ConsensusCard({ result }: { result: ConsensusV2Result })
         }}
       >
         Consensus
-      </p>
+      </h2>
 
       {/* Decision Confidence — headline decision signal */}
       <div className="flex items-center gap-2" style={{ marginTop: 8 }}>

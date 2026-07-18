@@ -33,7 +33,7 @@ export interface DebatePanelProps {
 
 function sectionHeading(text: string) {
   return (
-    <p
+    <h3
       style={{
         fontFamily: "var(--font-body)",
         fontSize: "0.75rem",
@@ -43,7 +43,7 @@ function sectionHeading(text: string) {
       }}
     >
       {text}
-    </p>
+    </h3>
   );
 }
 
@@ -67,7 +67,7 @@ export default function DebatePanel({
         marginTop: 16,
       }}
     >
-      <p
+      <h2
         style={{
           fontFamily: "var(--font-heading)",
           fontSize: "0.85rem",
@@ -76,7 +76,7 @@ export default function DebatePanel({
         }}
       >
         AI Debate
-      </p>
+      </h2>
 
       <p
         style={{

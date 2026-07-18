@@ -10,10 +10,19 @@ import type { SearchResultItem } from "@/lib/search/types";
 import { useSettings } from "@/lib/settings/SettingsContext";
 import SearchResult from "./SearchResult";
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+}
+
 export default function SearchModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { settings, rememberSearch } = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [indexVersion, setIndexVersion] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -25,7 +34,9 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
+    return () => previouslyFocused?.focus();
   }, []);
 
   const groups = useMemo(() => {
@@ -71,6 +82,20 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
     } else if (event.key === "Enter" && flatItems[activeIndex]) {
       event.preventDefault();
       handleSelect(flatItems[activeIndex]);
+    } else if (event.key === "Tab") {
+      const container = dialogRef.current;
+      if (!container) return;
+      const focusable = getFocusableElements(container);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   }
 
@@ -90,6 +115,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Global search"
@@ -189,6 +215,8 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
               </div>
             ) : (
               <p
+                role="status"
+                aria-live="polite"
                 style={{
                   fontFamily: "var(--font-body)",
                   fontSize: "0.82rem",

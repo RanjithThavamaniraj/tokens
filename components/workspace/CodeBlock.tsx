@@ -41,6 +41,7 @@ export default function CodeBlock({ language, value }: CodeBlockProps) {
         <button
           type="button"
           onClick={handleCopy}
+          aria-label={copied ? `Copied ${language ? language + " " : ""}code` : `Copy ${language ? language + " " : ""}code`}
           style={{
             fontFamily: "var(--font-body)",
             fontSize: "0.72rem",

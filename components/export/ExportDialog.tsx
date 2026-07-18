@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   canExportScope,
   runExport,
@@ -10,6 +10,14 @@ import { useSettings } from "@/lib/settings/SettingsContext";
 import { analyticsService } from "@/lib/analytics/AnalyticsService";
 import ExportOptions from "./ExportOptions";
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+}
+
 export default function ExportDialog({
   source,
   onClose,
@@ -18,6 +26,7 @@ export default function ExportDialog({
   onClose: () => void;
 }) {
   const { settings } = useSettings();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<ExportScope>("conversation");
   const [format, setFormat] = useState<ExportFormat>(
     settings.defaultExportFormat,
@@ -29,6 +38,16 @@ export default function ExportDialog({
     () => canExportScope(source, scope),
     [source, scope],
   );
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const container = dialogRef.current;
+    if (container) {
+      const focusable = getFocusableElements(container);
+      focusable[0]?.focus();
+    }
+    return () => previouslyFocused?.focus();
+  }, []);
 
   async function handleExport() {
     if (!validation.ok) {
@@ -54,6 +73,27 @@ export default function ExportDialog({
     }
   }
 
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    } else if (event.key === "Tab") {
+      const container = dialogRef.current;
+      if (!container) return;
+      const focusable = getFocusableElements(container);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
   return (
     <div
       role="presentation"
@@ -68,9 +108,11 @@ export default function ExportDialog({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Export Center"
+        onKeyDown={handleKeyDown}
         className="w-full max-w-[440px] rounded-lg"
         style={{
           background: "var(--color-bg)",

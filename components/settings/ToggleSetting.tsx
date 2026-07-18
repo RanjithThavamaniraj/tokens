@@ -47,12 +47,14 @@ export default function ToggleSetting({
       </span>
       <input
         type="checkbox"
+        role="switch"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
         className="sr-only"
       />
       <span
         aria-hidden="true"
+        className="toggle-track"
         style={{
           width: 40,
           height: 22,
