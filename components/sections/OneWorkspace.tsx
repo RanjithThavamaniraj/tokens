@@ -12,55 +12,24 @@ const fadeUp: Variants = {
   }),
 };
 
-type ProviderStatus = "Connected" | "Available" | "Coming Soon";
-
 const PROVIDERS: {
   name: string;
-  status: ProviderStatus;
   coin: string;
   slug: string;
+  comingSoon?: boolean;
 }[] = [
-  { name: "OpenAI", status: "Connected", coin: "/coins/openai.png", slug: "openai" },
-  {
-    name: "Claude",
-    status: "Connected",
-    coin: "/coins/claude.png",
-    slug: "claude",
-  },
-  {
-    name: "Gemini",
-    status: "Available",
-    coin: "/coins/gemini.png",
-    slug: "gemini",
-  },
-  {
-    name: "Grok",
-    status: "Available",
-    coin: "/coins/grok.png",
-    slug: "grok",
-  },
+  { name: "OpenAI", coin: "/coins/openai.png", slug: "openai" },
+  { name: "Claude", coin: "/coins/claude.png", slug: "claude" },
+  { name: "Gemini", coin: "/coins/gemini.png", slug: "gemini" },
+  { name: "Grok", coin: "/coins/grok.png", slug: "grok" },
   {
     name: "GitHub Copilot",
-    status: "Coming Soon",
     coin: "/coins/github-copilot.png",
     slug: "github-copilot",
+    comingSoon: true,
   },
-  {
-    name: "Perplexity",
-    status: "Available",
-    coin: "/coins/perplexity.png",
-    slug: "perplexity",
-  },
+  { name: "Perplexity", coin: "/coins/perplexity.png", slug: "perplexity" },
 ];
-
-const STATUS_STYLES: Record<ProviderStatus, { dot: string; text: string }> = {
-  Connected: { dot: "#EE7B30", text: "var(--color-accent)" },
-  Available: { dot: "rgba(248,250,252,0.7)", text: "var(--color-muted)" },
-  "Coming Soon": {
-    dot: "rgba(248,250,252,0.28)",
-    text: "rgba(248,250,252,0.45)",
-  },
-};
 
 const COIN_MASK =
   "radial-gradient(closest-side, rgba(0,0,0,1) 78%, rgba(0,0,0,0) 100%)";
@@ -204,29 +173,20 @@ export default function OneWorkspace() {
                 >
                   {provider.name}
                 </p>
-                <p
-                  className="flex items-center gap-2"
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    fontSize: "0.78rem",
-                    fontWeight: 500,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: STATUS_STYLES[provider.status].text,
-                    marginTop: 8,
-                  }}
-                >
-                  <span
-                    aria-hidden="true"
+                {provider.comingSoon && (
+                  <p
                     style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: STATUS_STYLES[provider.status].dot,
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.78rem",
+                      fontWeight: 500,
+                      letterSpacing: "0.06em",
+                      color: "rgba(248,250,252,0.45)",
+                      marginTop: 6,
                     }}
-                  />
-                  {provider.status}
-                </p>
+                  >
+                    Coming Soon
+                  </p>
+                )}
               </Link>
             </motion.div>
           ))}
