@@ -10,6 +10,7 @@ export type PerplexityErrorKind =
   | "not_found"
   | "rate_limited"
   | "server_error"
+  | "timeout"
   | "network_error"
   | "unknown";
 
@@ -52,7 +53,7 @@ export function createPerplexityHttpError(
       );
     case 401:
       return new PerplexityClientError(
-        "Invalid Perplexity API key or insufficient API credits.",
+        "Invalid API key.",
         "invalid_api_key",
         status,
       );
@@ -91,10 +92,20 @@ export function createPerplexityHttpError(
 }
 
 export function normalizePerplexityError(error: unknown): PerplexityClientError {
+  if (
+    (error instanceof Error && error.name === "AbortError") ||
+    (error instanceof Error && /timed?\s?out|timeout/i.test(error.message))
+  ) {
+    return new PerplexityClientError(
+      "The request to Perplexity timed out. Please try again.",
+      "timeout",
+    );
+  }
+
   if (error instanceof PerplexityClientError) return error;
   return new PerplexityClientError(
     error instanceof TypeError
-      ? "Network error. Check your connection and try again."
+      ? "We couldn't reach Perplexity. Please check your internet connection or try again."
       : "Unable to connect to Perplexity. Please try again.",
     error instanceof TypeError ? "network_error" : "unknown",
   );

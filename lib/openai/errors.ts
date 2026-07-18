@@ -2,6 +2,7 @@ export type OpenAIErrorKind =
   | "invalid_api_key"
   | "forbidden"
   | "rate_limited"
+  | "timeout"
   | "network_error"
   | "unknown";
 
@@ -35,6 +36,16 @@ export function normalizeOpenAIError(error: unknown): OpenAIClientError {
     return error;
   }
 
+  if (
+    (error instanceof Error && error.name === "AbortError") ||
+    (error instanceof Error && /timed?\s?out|timeout/i.test(error.message))
+  ) {
+    return new OpenAIClientError(
+      "The request to OpenAI timed out. Please try again.",
+      "timeout",
+    );
+  }
+
   const status = (error as { status?: unknown } | null)?.status;
 
   if (typeof status === "number") {
@@ -52,6 +63,12 @@ export function normalizeOpenAIError(error: unknown): OpenAIClientError {
           "rate_limited",
         );
       default:
+        if (status >= 500) {
+          return new OpenAIClientError(
+            "OpenAI is temporarily unavailable. Please try again.",
+            "unknown",
+          );
+        }
         return new OpenAIClientError(
           "Unable to connect to OpenAI. Please try again.",
           "unknown",
@@ -63,7 +80,7 @@ export function normalizeOpenAIError(error: unknown): OpenAIClientError {
   // APIConnectionError) or a plain network failure (e.g. TypeError from
   // fetch).
   return new OpenAIClientError(
-    "Network error. Check your connection and try again.",
+    "We couldn't reach OpenAI. Please check your internet connection or try again.",
     "network_error",
   );
 }

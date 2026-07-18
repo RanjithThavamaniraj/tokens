@@ -18,7 +18,7 @@ export default function ProjectTable({
           margin: 0,
         }}
       >
-        No projects found.
+        No projects yet.
       </p>
     );
   }

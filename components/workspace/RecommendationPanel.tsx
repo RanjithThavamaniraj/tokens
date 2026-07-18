@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import MarkdownResponse from "@/components/workspace/MarkdownResponse";
 import type { ProviderId } from "@/lib/providers/Provider";
 import { computeResponseStats } from "@/lib/workspace/responseStats";
@@ -157,6 +158,17 @@ export default function RecommendationPanel({
           }}
         >
           {recommendation.error}
+          {recommendation.error === "Not connected. Connect this provider first." && (
+            <>
+              {" "}
+              <Link
+                href={`/providers/${selectedProviderId}`}
+                style={{ color: "var(--color-accent)" }}
+              >
+                Configure provider
+              </Link>
+            </>
+          )}
         </p>
       )}
 

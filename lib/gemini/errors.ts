@@ -2,6 +2,7 @@ export type GeminiErrorKind =
   | "invalid_api_key"
   | "forbidden"
   | "rate_limited"
+  | "timeout"
   | "network_error"
   | "unknown";
 
@@ -33,6 +34,16 @@ export class GeminiClientError extends Error {
 export function normalizeGeminiError(error: unknown): GeminiClientError {
   if (error instanceof GeminiClientError) {
     return error;
+  }
+
+  if (
+    (error instanceof Error && error.name === "AbortError") ||
+    (error instanceof Error && /timed?\s?out|timeout/i.test(error.message))
+  ) {
+    return new GeminiClientError(
+      "The request to Gemini timed out. Please try again.",
+      "timeout",
+    );
   }
 
   const message =
@@ -76,6 +87,12 @@ export function normalizeGeminiError(error: unknown): GeminiClientError {
           "unknown",
         );
       default:
+        if (status >= 500) {
+          return new GeminiClientError(
+            "Gemini is temporarily unavailable. Please try again.",
+            "unknown",
+          );
+        }
         return new GeminiClientError(
           "Unable to connect to Gemini. Please try again.",
           "unknown",
@@ -86,7 +103,7 @@ export function normalizeGeminiError(error: unknown): GeminiClientError {
   // No `.status` present: either a connection-level failure or a plain
   // network failure (e.g. TypeError from fetch).
   return new GeminiClientError(
-    "Network error. Check your connection and try again.",
+    "We couldn't reach Gemini. Please check your internet connection or try again.",
     "network_error",
   );
 }

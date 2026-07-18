@@ -2,6 +2,7 @@ export type AnthropicErrorKind =
   | "invalid_api_key"
   | "forbidden"
   | "rate_limited"
+  | "timeout"
   | "network_error"
   | "unknown";
 
@@ -35,6 +36,16 @@ export function normalizeAnthropicError(error: unknown): AnthropicClientError {
     return error;
   }
 
+  if (
+    (error instanceof Error && error.name === "AbortError") ||
+    (error instanceof Error && /timed?\s?out|timeout/i.test(error.message))
+  ) {
+    return new AnthropicClientError(
+      "The request to Anthropic timed out. Please try again.",
+      "timeout",
+    );
+  }
+
   const status = (error as { status?: unknown } | null)?.status;
 
   if (typeof status === "number") {
@@ -52,6 +63,12 @@ export function normalizeAnthropicError(error: unknown): AnthropicClientError {
           "rate_limited",
         );
       default:
+        if (status >= 500) {
+          return new AnthropicClientError(
+            "Anthropic is temporarily unavailable. Please try again.",
+            "unknown",
+          );
+        }
         return new AnthropicClientError(
           "Unable to connect to Anthropic. Please try again.",
           "unknown",
@@ -63,7 +80,7 @@ export function normalizeAnthropicError(error: unknown): AnthropicClientError {
   // APIConnectionError) or a plain network failure (e.g. TypeError from
   // fetch).
   return new AnthropicClientError(
-    "Network error. Check your connection and try again.",
+    "We couldn't reach Anthropic. Please check your internet connection or try again.",
     "network_error",
   );
 }

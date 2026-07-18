@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
+import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
 import type {
@@ -626,7 +627,7 @@ export default function WorkspacePage() {
       }));
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Something went wrong.";
+        error instanceof Error ? error.message : "Something went wrong. Please try again.";
       if (error instanceof Error && error.name === "AuthenticationError") {
         await connectionManager.clear(reviewerId);
       }
@@ -802,7 +803,7 @@ export default function WorkspacePage() {
       return { ok: true, text: result.text };
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Something went wrong.";
+        error instanceof Error ? error.message : "Something went wrong. Please try again.";
       if (error instanceof Error && error.name === "AuthenticationError") {
         await connectionManager.clear(providerId);
       }
@@ -1320,7 +1321,7 @@ export default function WorkspacePage() {
       }
 
       const message =
-        error instanceof Error ? error.message : "Something went wrong.";
+        error instanceof Error ? error.message : "Something went wrong. Please try again.";
       if (error instanceof Error && error.name === "AuthenticationError") {
         await connectionManager.clear(id);
       }
@@ -1993,6 +1994,27 @@ export default function WorkspacePage() {
                             Review
                           </button>
                         </div>
+                      ) : result?.status === "error" ? (
+                        <button
+                          type="button"
+                          onClick={() => executeTurn(id, [], userPrompt)}
+                          disabled={userPrompt.trim() === ""}
+                          aria-label={`Retry ${provider.displayName}`}
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: "0.75rem",
+                            color: "var(--color-text)",
+                            background: "var(--color-glass)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: 999,
+                            padding: "4px 10px",
+                            cursor: userPrompt.trim() === "" ? "not-allowed" : "pointer",
+                            opacity: userPrompt.trim() === "" ? 0.6 : 1,
+                            flexShrink: 0,
+                          }}
+                        >
+                          Retry
+                        </button>
                       ) : null}
                     </div>
                     {reviewDialogFor === id && (
@@ -2233,6 +2255,17 @@ export default function WorkspacePage() {
                           }}
                         >
                           {result.error}
+                          {result.error === "Not connected. Connect this provider first." && (
+                            <>
+                              {" "}
+                              <Link
+                                href={`/providers/${id}`}
+                                style={{ color: "var(--color-accent)" }}
+                              >
+                                Configure provider
+                              </Link>
+                            </>
+                          )}
                         </p>
                       )}
                       {(() => {
@@ -2412,6 +2445,23 @@ export default function WorkspacePage() {
               );
             })()}
           </motion.div>
+        )}
+        {!hasRun && (
+          <div
+            className="mx-auto w-full max-w-[640px]"
+            style={{ marginTop: "clamp(40px, 6vw, 56px)" }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.85rem",
+                color: "var(--color-muted)",
+                textAlign: "center",
+              }}
+            >
+              Run a prompt to see how each provider responds.
+            </p>
+          </div>
         )}
           </div>
         </div>

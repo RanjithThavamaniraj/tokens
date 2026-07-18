@@ -58,7 +58,7 @@ export class GrokProvider extends BaseProvider {
   async connect(credentials?: Record<string, string>): Promise<void> {
     const apiKey = credentials?.apiKey;
     if (!apiKey) {
-      throw new XAIClientError("An API key is required.", "invalid_api_key");
+      throw new XAIClientError("No API key has been configured for Grok.", "invalid_api_key");
     }
     await listModels(apiKey);
   }
@@ -75,7 +75,7 @@ export class GrokProvider extends BaseProvider {
   ): Promise<ProviderExecutionResult> {
     const apiKey = request.credentials?.apiKey;
     if (!apiKey) {
-      throw new XAIClientError("An API key is required.", "invalid_api_key");
+      throw new XAIClientError("No API key has been configured for Grok.", "invalid_api_key");
     }
     return generateCompletion(apiKey, request.messages, {
       modelId: request.modelId,

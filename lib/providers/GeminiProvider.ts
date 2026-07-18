@@ -62,7 +62,7 @@ export class GeminiProvider extends BaseProvider {
   async connect(credentials?: Record<string, string>): Promise<void> {
     const apiKey = credentials?.apiKey;
     if (!apiKey) {
-      throw new GeminiClientError("An API key is required.", "invalid_api_key");
+      throw new GeminiClientError("No API key has been configured for Gemini.", "invalid_api_key");
     }
     await listModels(apiKey); // validates the key; result intentionally discarded, not stored
   }
@@ -79,7 +79,7 @@ export class GeminiProvider extends BaseProvider {
   async executePrompt(request: ProviderExecutionRequest): Promise<ProviderExecutionResult> {
     const apiKey = request.credentials?.apiKey;
     if (!apiKey) {
-      throw new GeminiClientError("An API key is required.", "invalid_api_key");
+      throw new GeminiClientError("No API key has been configured for Gemini.", "invalid_api_key");
     }
     return generateCompletion(apiKey, request.messages, {
       modelId: request.modelId,

@@ -214,21 +214,47 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             ) : (
-              <p
-                role="status"
-                aria-live="polite"
-                style={{
-                  fontFamily: "var(--font-body)",
-                  fontSize: "0.82rem",
-                  color: "var(--color-muted)",
-                  padding: "18px 12px",
-                  textAlign: "center",
-                }}
-              >
-                {query.trim()
-                  ? "No matches found."
-                  : "Type to search projects, prompts, responses, recommendations, and more."}
-              </p>
+              <>
+                <p
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: "0.82rem",
+                    color: "var(--color-muted)",
+                    padding: "18px 12px",
+                    textAlign: "center",
+                  }}
+                >
+                  {query.trim()
+                    ? "No matches found."
+                    : "Type to search projects, prompts, responses, recommendations, and more."}
+                </p>
+                {query.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      setActiveIndex(0);
+                    }}
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      fontSize: "0.75rem",
+                      background: "var(--color-glass)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 999,
+                      padding: "4px 12px",
+                      color: "var(--color-text)",
+                      cursor: "pointer",
+                      margin: "0 auto",
+                      display: "block",
+                      marginTop: 8,
+                    }}
+                  >
+                    Clear Search
+                  </button>
+                )}
+              </>
             )
           ) : (
             groups.map((group) => {

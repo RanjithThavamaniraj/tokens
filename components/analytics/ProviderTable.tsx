@@ -21,7 +21,7 @@ export default function ProviderTable({
 }) {
   if (providers.length === 0) {
     return (
-      <Empty text="No provider activity yet. Run prompts in the workspace to populate this table." />
+      <Empty text="No provider activity yet — run a prompt in the workspace to get started." />
     );
   }
 

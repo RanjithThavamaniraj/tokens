@@ -64,7 +64,7 @@ export class PerplexityProvider extends BaseProvider {
     const apiKey = credentials?.apiKey;
     if (!apiKey) {
       throw new PerplexityClientError(
-        "An API key is required.",
+        "No API key has been configured for Perplexity.",
         "invalid_api_key",
       );
     }
@@ -84,7 +84,7 @@ export class PerplexityProvider extends BaseProvider {
     const apiKey = request.credentials?.apiKey;
     if (!apiKey) {
       throw new PerplexityClientError(
-        "An API key is required.",
+        "No API key has been configured for Perplexity.",
         "invalid_api_key",
       );
     }
