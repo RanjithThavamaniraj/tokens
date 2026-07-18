@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import SearchModal from "./SearchModal";
+import dynamic from "next/dynamic";
+
+const SearchModal = dynamic(() => import("./SearchModal"));
 
 const noopSubscribe = () => () => {};
 

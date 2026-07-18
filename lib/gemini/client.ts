@@ -1,4 +1,4 @@
-import { GoogleGenAI, type Model } from "@google/genai";
+import type { GoogleGenAI, Model } from "@google/genai";
 import type {
   Message,
   ProviderExecutionResult,
@@ -7,8 +7,9 @@ import type {
 import type { GeminiModelSummary } from "./types";
 import { normalizeGeminiError } from "./errors";
 
-function createSdkClient(apiKey: string): GoogleGenAI {
-  return new GoogleGenAI({ apiKey });
+async function createSdkClient(apiKey: string): Promise<GoogleGenAI> {
+  const { GoogleGenAI: GoogleGenAIClient } = await import("@google/genai");
+  return new GoogleGenAIClient({ apiKey });
 }
 
 // Used for BOTH validation (connect() calls this and discards the result —
@@ -17,7 +18,7 @@ function createSdkClient(apiKey: string): GoogleGenAI {
 // this file — every call hits the network.
 export async function listModels(apiKey: string): Promise<GeminiModelSummary[]> {
   try {
-    const client = createSdkClient(apiKey);
+    const client = await createSdkClient(apiKey);
     // `queryBase: true` is required to list base Gemini models — without it
     // the API lists the caller's tuned models instead.
     const pager = await client.models.list({ config: { queryBase: true } });
@@ -77,7 +78,7 @@ export async function generateCompletion(
         parts: [{ text: message.content }],
       }));
 
-    const client = createSdkClient(apiKey);
+    const client = await createSdkClient(apiKey);
     const response = await client.models.generateContentStream({
       model: options?.modelId ?? "gemini-2.0-flash",
       contents,

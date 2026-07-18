@@ -1,8 +1,6 @@
 import type { ProviderId } from "@/lib/providers/Provider";
 import { reviewFocusLabel } from "@/lib/workspace/review";
 import { exportToMarkdown, type MarkdownExportOptions } from "./MarkdownExporter";
-import { exportToPdf } from "./PdfExporter";
-import { exportToDocx } from "./DocxExporter";
 import { exportToJsonString } from "./JsonExporter";
 import type {
   ExportDocument,
@@ -230,6 +228,7 @@ export async function runExport(
       return;
     }
     case "pdf": {
+      const { exportToPdf } = await import("./PdfExporter");
       downloadBlob(
         await exportToPdf(document, markdownOptions),
         `${baseName}.pdf`,
@@ -237,6 +236,7 @@ export async function runExport(
       return;
     }
     case "docx": {
+      const { exportToDocx } = await import("./DocxExporter");
       downloadBlob(
         await exportToDocx(document, markdownOptions),
         `${baseName}.docx`,

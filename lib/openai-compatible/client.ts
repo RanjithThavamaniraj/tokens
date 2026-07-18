@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import type {
   Message,
   ProviderExecutionResult,
@@ -18,11 +18,12 @@ interface StreamCompletionOptions extends OpenAICompatibleClientOptions {
   onChunk?: (chunk: string) => void;
 }
 
-function createClient({
+async function createClient({
   apiKey,
   baseURL,
-}: OpenAICompatibleClientOptions): OpenAI {
-  return new OpenAI({
+}: OpenAICompatibleClientOptions): Promise<OpenAI> {
+  const { default: OpenAIClient } = await import("openai");
+  return new OpenAIClient({
     apiKey,
     ...(baseURL ? { baseURL } : {}),
     dangerouslyAllowBrowser: true,
@@ -40,7 +41,8 @@ export async function listOpenAICompatibleModels(
   options: OpenAICompatibleClientOptions,
 ): Promise<{ id: string }[]> {
   try {
-    const response = await createClient(options).models.list();
+    const client = await createClient(options);
+    const response = await client.models.list();
     const models = response.data.map((model) => ({ id: model.id }));
     models.sort((a, b) => a.id.localeCompare(b.id));
     return models;
@@ -59,11 +61,12 @@ export async function streamOpenAICompatibleCompletion({
   normalizeError,
 }: StreamCompletionOptions): Promise<ProviderExecutionResult> {
   try {
-    const stream = await createClient({
+    const client = await createClient({
       apiKey,
       baseURL,
       normalizeError,
-    }).chat.completions.create(
+    });
+    const stream = await client.chat.completions.create(
       {
         model,
         messages: messages.map((message) => ({

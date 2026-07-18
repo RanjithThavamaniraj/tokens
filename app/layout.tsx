@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
+import { Inter, Syne } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["800"],
+  variable: "--font-syne",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Tokens — The AI Command Center",
@@ -13,7 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" data-theme="dark">
+    <html
+      lang="en"
+      className={`${inter.variable} ${syne.variable} h-full antialiased`}
+      data-theme="dark"
+    >
       <head>
         <link
           rel="stylesheet"

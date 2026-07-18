@@ -1,9 +1,27 @@
 "use client";
 
 import { memo } from "react";
+import dynamic from "next/dynamic";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import CodeBlock from "@/components/workspace/CodeBlock";
+
+const CodeBlock = dynamic(
+  () => import("@/components/workspace/CodeBlock"),
+  {
+    loading: () => (
+      <div
+        aria-hidden="true"
+        style={{
+          minHeight: 72,
+          margin: "12px 0",
+          borderRadius: 12,
+          border: "1px solid var(--color-border)",
+          background: "var(--color-bg)",
+        }}
+      />
+    ),
+  },
+);
 
 type MarkdownResponseProps = {
   text: string;

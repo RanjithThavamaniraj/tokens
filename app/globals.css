@@ -1,11 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;800&display=swap");
 @import "tailwindcss";
 
 :root,
 :root[data-theme="dark"] {
   --font-heading: "Helvetica Now Display Bold", sans-serif;
-  --font-body: "Inter", sans-serif;
+  --font-body: var(--font-inter), sans-serif;
   --color-bg: #06070b;
   --color-text: #f8fafc;
   --color-accent: #ee7b30;

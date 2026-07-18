@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 export interface OnboardingProviderCard {
   id: string;
@@ -52,8 +53,7 @@ export default function ProviderStep({
               padding: "12px 14px",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={provider.logo}
               alt=""
               width={36}

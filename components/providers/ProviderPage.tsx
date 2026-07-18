@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { motion, type Variants } from "framer-motion";
+import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Tabs from "@/components/providers/Tabs";
 import OverviewSection from "@/components/providers/OverviewSection";
@@ -150,10 +151,12 @@ export default function ProviderPage({
                 transform: "scale(1.35)",
               }}
             />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={coinSrc}
               alt={`${name} token coin`}
+              width={1024}
+              height={1024}
+              sizes="(max-width: 393px) 56vw, 220px"
               className="relative h-full w-full object-cover"
               style={{
                 WebkitMaskImage: COIN_MASK,

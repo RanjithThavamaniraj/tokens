@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion, type Variants } from "framer-motion";
 
 const fadeUp: Variants = {
@@ -143,10 +144,12 @@ export default function OneWorkspace() {
                     height: "min(56vw, 240px)",
                   }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={provider.coin}
                     alt={`${provider.name} token coin`}
+                    width={1024}
+                    height={1024}
+                    sizes="(max-width: 428px) 56vw, 240px"
                     className="relative h-full w-full object-cover"
                     style={{
                       WebkitMaskImage: COIN_MASK,

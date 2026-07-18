@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import { createProvider } from "@/lib/providers/ProviderFactory";
@@ -57,11 +58,14 @@ import {
   consumeSearchNavigation,
   SEARCH_NAVIGATE_EVENT,
 } from "@/lib/search/SearchEngine";
-import ExportDialog from "@/components/export/ExportDialog";
 import type { ExportSource } from "@/lib/export/types";
 import { useSettings } from "@/lib/settings/SettingsContext";
 import { useRouter } from "next/navigation";
 import { onboardingService } from "@/lib/onboarding/OnboardingService";
+
+const ExportDialog = dynamic(
+  () => import("@/components/export/ExportDialog"),
+);
 
 // Real, executable providers supported by the workspace runner. Behavior is
 // driven by Provider instances; this fixed order only controls presentation.

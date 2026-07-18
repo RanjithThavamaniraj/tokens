@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type {
   Message,
   ProviderExecutionResult,
@@ -6,8 +6,9 @@ import type {
 import type { AnthropicModelSummary } from "./types";
 import { normalizeAnthropicError } from "./errors";
 
-function createSdkClient(apiKey: string): Anthropic {
-  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+async function createSdkClient(apiKey: string): Promise<Anthropic> {
+  const { default: AnthropicClient } = await import("@anthropic-ai/sdk");
+  return new AnthropicClient({ apiKey, dangerouslyAllowBrowser: true });
 }
 
 // Used for BOTH validation (connect() calls this and discards the result —
@@ -16,7 +17,7 @@ function createSdkClient(apiKey: string): Anthropic {
 // this file — every call hits the network.
 export async function listModels(apiKey: string): Promise<AnthropicModelSummary[]> {
   try {
-    const client = createSdkClient(apiKey);
+    const client = await createSdkClient(apiKey);
     const response = await client.models.list();
     const models = response.data.map((model) => ({
       id: model.id,
@@ -60,7 +61,7 @@ export async function generateCompletion(
       )
       .map((message) => ({ role: message.role, content: message.content }));
 
-    const client = createSdkClient(apiKey);
+    const client = await createSdkClient(apiKey);
     let text = "";
     const stream = client.messages
       .stream(

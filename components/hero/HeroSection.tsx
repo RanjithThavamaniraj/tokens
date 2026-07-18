@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 
 type HeroSectionProps = {
@@ -37,9 +38,11 @@ export default function HeroSection({
         <Navbar />
       </div>
 
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        className="absolute inset-0 h-full w-full object-cover"
+      <Image
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
         src={backgroundImage}
         alt=""
       />
@@ -115,7 +118,7 @@ export default function HeroSection({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, duration: 0.6 }}
           style={{
-            fontFamily: "'Syne', system-ui, sans-serif",
+            fontFamily: "var(--font-syne), system-ui, sans-serif",
             fontWeight: 800,
             lineHeight: 1.1,
             color: "white",
