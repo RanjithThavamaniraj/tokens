@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "@/components/workspace/CodeBlock";
@@ -277,10 +278,12 @@ const components: Components = {
   ),
 };
 
-export default function MarkdownResponse({ text }: MarkdownResponseProps) {
+function MarkdownResponse({ text }: MarkdownResponseProps) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
       {text}
     </ReactMarkdown>
   );
 }
+
+export default memo(MarkdownResponse);

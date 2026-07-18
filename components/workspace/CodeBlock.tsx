@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
@@ -9,7 +9,7 @@ type CodeBlockProps = {
   value: string;
 };
 
-export default function CodeBlock({ language, value }: CodeBlockProps) {
+function CodeBlock({ language, value }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -74,3 +74,5 @@ export default function CodeBlock({ language, value }: CodeBlockProps) {
     </div>
   );
 }
+
+export default memo(CodeBlock);

@@ -1411,6 +1411,26 @@ export default function WorkspacePage() {
     ? WORKSPACE_PROVIDER_IDS.filter((id) => selectedIds.has(id))
     : [];
 
+  const consensus = useMemo(() => {
+    const consensusResponses: ConsensusResponse[] = visibleResults
+      .map((id): ConsensusResponse | null => {
+        const text = lastAssistantText(conversations[id] ?? []);
+        if (!text) return null;
+        const provider = providers.find((entry) => entry.id === id)!.provider;
+        return {
+          id: id as string,
+          displayName: provider.displayName,
+          text,
+        };
+      })
+      .filter((entry): entry is ConsensusResponse => entry !== null);
+
+    if (consensusResponses.length < 2) return null;
+
+    return computeConsensusV2(consensusResponses);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRun, selectedIds, conversations, providers]);
+
   const exportSource: ExportSource | null = (() => {
     const project = projects.find((entry) => entry.id === activeProjectId);
     if (!project) return null;
@@ -1764,25 +1784,7 @@ export default function WorkspacePage() {
             className="mx-auto w-full max-w-[640px]"
             style={{ marginTop: "clamp(40px, 6vw, 56px)" }}
           >
-            {(() => {
-              const consensusResponses: ConsensusResponse[] = visibleResults
-                .map((id): ConsensusResponse | null => {
-                  const text = lastAssistantText(conversations[id] ?? []);
-                  if (!text) return null;
-                  const provider = providers.find((entry) => entry.id === id)!.provider;
-                  return {
-                    id: id as string,
-                    displayName: provider.displayName,
-                    text,
-                  };
-                })
-                .filter((entry): entry is ConsensusResponse => entry !== null);
-
-              if (consensusResponses.length < 2) return null;
-
-              const consensus = computeConsensusV2(consensusResponses);
-              return <ConsensusCard result={consensus} />;
-            })()}
+            {consensus && <ConsensusCard result={consensus} />}
             {(() => {
               const comparisonEntries: ComparisonEntry[] = visibleResults
                 .map((id): ComparisonEntry | null => {
