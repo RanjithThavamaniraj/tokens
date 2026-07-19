@@ -24,6 +24,7 @@ const PROVIDER_IDS: ProviderId[] = [
   "gemini",
   "grok",
   "perplexity",
+  "mistral",
 ];
 
 const STEP_IDS = ONBOARDING_STEPS.map((step) => step.id);

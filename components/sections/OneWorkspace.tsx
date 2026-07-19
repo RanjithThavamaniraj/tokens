@@ -22,11 +22,7 @@ const PROVIDERS: {
   { name: "Claude", coin: "/coins/claude.png", slug: "claude" },
   { name: "Gemini", coin: "/coins/gemini.png", slug: "gemini" },
   { name: "Grok", coin: "/coins/grok.png", slug: "grok" },
-  {
-    name: "GitHub Copilot",
-    coin: "/coins/github-copilot.png",
-    slug: "github-copilot",
-  },
+  { name: "Mistral AI", coin: "/coins/mistral.png", slug: "mistral" },
   { name: "Perplexity", coin: "/coins/perplexity.png", slug: "perplexity" },
 ];
 

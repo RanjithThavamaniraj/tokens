@@ -6,7 +6,6 @@ import Navbar from "@/components/layout/Navbar";
 const KNOWN_SLUGS = [
   "claude",
   "gemini",
-  "github-copilot",
 ] as const;
 
 export function generateStaticParams() {

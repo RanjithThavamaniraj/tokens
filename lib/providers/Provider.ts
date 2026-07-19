@@ -14,7 +14,7 @@ export type ProviderId =
   | "perplexity"
   | "openrouter"
   | "cursor"
-  | "github-copilot";
+  | "mistral";
 
 export type ProviderStatus =
   | "connected"

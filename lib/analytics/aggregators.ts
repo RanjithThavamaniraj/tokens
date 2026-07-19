@@ -23,6 +23,7 @@ const MODEL_COST_PER_MILLION: Record<string, { input: number; output: number }> 
   "gemini-2.0-flash": { input: 0.1, output: 0.4 },
   "grok-4.5": { input: 3, output: 15 },
   "perplexity/sonar": { input: 1, output: 1 },
+  "mistral-large-latest": { input: 2, output: 6 },
 };
 
 function providerName(id: string): string {

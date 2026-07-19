@@ -6,7 +6,7 @@ import { GrokProvider } from "@/lib/providers/GrokProvider";
 import { PerplexityProvider } from "@/lib/providers/PerplexityProvider";
 import { OpenRouterProvider } from "@/lib/providers/OpenRouterProvider";
 import { CursorProvider } from "@/lib/providers/CursorProvider";
-import { GitHubCopilotProvider } from "@/lib/providers/GitHubCopilotProvider";
+import { MistralProvider } from "@/lib/providers/MistralProvider";
 
 // Registry of provider constructors, keyed by ProviderId. The UI must never
 // `new` a provider class directly — it should always go through
@@ -20,7 +20,7 @@ const REGISTRY: Record<ProviderId, new () => Provider> = {
   perplexity: PerplexityProvider,
   openrouter: OpenRouterProvider,
   cursor: CursorProvider,
-  "github-copilot": GitHubCopilotProvider,
+  mistral: MistralProvider,
 };
 
 function isProviderId(id: string): id is ProviderId {
