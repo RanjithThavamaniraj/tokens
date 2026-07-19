@@ -94,13 +94,21 @@ export interface ProjectRepository {
 
 export function emptyProjectWorkspace(): ProjectWorkspaceState {
   return {
-    selectedProviderIds: ["openai", "claude", "gemini", "grok", "perplexity"],
+    selectedProviderIds: [
+      "openai",
+      "claude",
+      "gemini",
+      "grok",
+      "perplexity",
+      "mistral",
+    ],
     selectedModelIds: {
       openai: "gpt-4o-mini",
       claude: "claude-haiku-4-5",
       gemini: "gemini-2.0-flash",
       grok: "grok-4.5",
       perplexity: "perplexity/sonar",
+      mistral: "mistral-large-latest",
     },
     responseUsage: {},
     stoppedProviderIds: [],
